@@ -31,20 +31,7 @@ process_execute (const char *file_name)
   char *fn_copy;
   tid_t tid;
 
-
-/*
-*/
-  char *token, *save_ptr;
-  char *args[128];
-  int count =0;
-
-
-  for (token = strtok_r (file_name, " ", &save_ptr); token != NULL;
-       token = strtok_r (NULL, " ", &save_ptr)){
-         args[count] = token;
-         printf ("'%s'\n", token);
-         count++;
-       }
+  printf("something\n");
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -68,6 +55,7 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
+  printf("123123123\n");
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -103,6 +91,8 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED)
 {
+  struct thread *t = thread_current();
+  while (t->dead != 1) { printf("%d\n", t->dead); }
   return -1;
 }
 
@@ -129,7 +119,9 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-    printf("%s:exit(%d)\n", cur->name, -1);
+  printf("%s:exit(%d)\n", cur->name, -1);
+
+  cur->dead = 1;
 }
 
 /* Sets up the CPU for running user code in the current
@@ -230,6 +222,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
+  printf("123123123\n");
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -237,11 +230,27 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
+  /* */
+  int count = 0;
+  char *args[128];
+  char *args_addr[128];
+  char *token, *save_ptr;
+
+  for (token = strtok_r (file_name, " ", &save_ptr); token != NULL;
+      token = strtok_r (NULL, " ", &save_ptr)){
+        args[count] = token;
+        printf ("'%s'\n", token);
+        count++;
+      }
+
+  printf("args[0] = '%s'\n", args[0]);
+
+
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (args[0]);
   if (file == NULL)
     {
-      printf ("load: %s: open failed\n", file_name);
+      printf ("load: %s: open failed\n", args[0]);
       goto done;
     }
 
@@ -318,13 +327,48 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  printf("1\n");
+  if (!setup_stack (esp)) {
     goto done;
+  }
+
+  int *current_address = PHYS_BASE;
+  int total_bytes = 0;
+  for (int i = 0; i < count; i++) {
+    current_address = current_address - (strlen(args[i] + 1));
+    args_addr[i] = current_address;
+    strlcpy(current_address, args[i], strlen(args[i]));
+    total_bytes += strlen(args[i]) + 1;
+  }
+
+  for (int i = 0; i < total_bytes % 4; i++) {
+    current_address -= 1;
+    strlcpy(current_address, "\0", 1);
+  }
+
+  current_address -= 4;
+  *current_address = 0;
+
+  for (int i = 0; i < count; i++) {
+    current_address -= 4;
+    *current_address = args_addr[i];
+  }
+
+  current_address -= 4;
+  *current_address = count;
+
+  current_address -= 4;
+  *current_address = 0;
+
+  esp = current_address;
+
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
   success = true;
+
+  hex_dump(0, esp, 120, 1);
 
  done:
   /* We arrive here whether the load is successful or not. */
@@ -453,8 +497,7 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE - 12;
-        //*esp = PHYS_BASE;
+        *esp = PHYS_BASE;
       else
         palloc_free_page (kpage);
     }
