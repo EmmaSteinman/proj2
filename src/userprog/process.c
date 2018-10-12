@@ -20,6 +20,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static void setup_arguments(int argc, char **argv, void **esp);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -57,6 +58,20 @@ start_process (void *file_name_)
   bool success;
   printf("123123123\n");
 
+  /* Parse arguments */
+  int args_count = 0;
+  char *args[128];
+  char *token, *save_ptr;
+
+  for (token = strtok_r (file_name, " ", &save_ptr); token != NULL;
+      token = strtok_r (NULL, " ", &save_ptr)){
+        args[args_count] = token;
+        printf ("'%s'\n", token);
+        args_count++;
+      }
+
+  printf("args[0] = '%s'\n", args[0]);
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -65,9 +80,14 @@ start_process (void *file_name_)
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success)
+  if (!success) {
+    palloc_free_page(file_name);
     thread_exit ();
+  }
+
+  /* Put arguments on the stack */
+  setup_arguments(args_count, args, &if_.esp);
+  palloc_free_page(file_name);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -229,27 +249,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
-  /* */
-  int args_count = 0;
-  char *args[128];
-  char *args_addr[128];
-  char *token, *save_ptr;
-
-  for (token = strtok_r (file_name, " ", &save_ptr); token != NULL;
-      token = strtok_r (NULL, " ", &save_ptr)){
-        args[args_count] = token;
-        printf ("'%s'\n", token);
-        args_count++;
-      }
-
-  printf("args[0] = '%s'\n", args[0]);
-
 
   /* Open executable file. */
-  file = filesys_open (args[0]);
+  file = filesys_open (file_name);
   if (file == NULL)
     {
-      printf ("load: %s: open failed\n", args[0]);
+      printf ("load: %s: open failed\n", file_name);
       goto done;
     }
 
@@ -262,7 +267,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024)
     {
-      printf ("load: %s: error loading executable\n", args[0]);
+      printf ("load: %s: error loading executable\n", file_name);
       goto done;
     }
 
@@ -331,61 +336,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   }
 
-  printf("Before argument parsing: esp = %p\n", *esp);
-
-  void *current_address = *esp;
-  int total_bytes = 0;
-  printf("args_count = %d\n", args_count);
-  for (int i = 0; i < args_count; i++) {
-    int arg_len = strlen(args[i]) + 1;
-    printf("arg len = %d\n", arg_len);
-    printf("args[%d] = '%s'\n", i, args[i]);
-    printf("current_address = %p\n", current_address);
-
-    current_address = current_address - arg_len;
-
-    printf("args_addr[%d] = %p\n", i, current_address);
-
-    args_addr[i] = current_address;
-    strlcpy(current_address, args[i], arg_len);
-    total_bytes += arg_len;
-
-  }
-
-  for (int i = 0; i < 4 - total_bytes % 4; i++) {
-    current_address -= 1;
-    strlcpy(current_address, "\0", 1);
-  }
-
-  printf("current_address after args: %p\n", current_address);
-  current_address -= 4;
-  memset(current_address, 0, sizeof(void *));
-
-  for (int i = 0; i < args_count; i++) {
-    current_address -= 4;
-    memcpy(current_address, &args_addr[i], sizeof(void *));
-  }
-
-  void *argc_addr = current_address;
-  current_address -= 4;
-  memcpy(current_address, &argc_addr, sizeof(void *));
-
-  current_address -= 4;
-  memcpy(current_address, &args_count, sizeof(int));
-
-  current_address -= 4;
-  memset(current_address, 0, sizeof(void *));
-
-  *esp = current_address;
-
-
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
   success = true;
-
-  printf("esp: %p\n", *esp);
-  hex_dump(*esp, *esp, 150, 1);
 
  done:
   /* We arrive here whether the load is successful or not. */
@@ -539,4 +493,68 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+/*
+ */
+static void
+setup_arguments(int argc, char **args, void **esp)
+{
+  printf("Before argument parsing: esp = %p\n", *esp);
+  char *args_addr[128];
+
+  // Push the arguments
+  void *current_address = *esp;
+  int total_bytes = 0;
+  printf("args_count = %d\n", argc);
+  for (int i = 0; i < argc; i++) {
+    int arg_len = strlen(args[i]) + 1;
+    printf("arg len = %d\n", arg_len);
+    printf("args[%d] = '%s'\n", i, args[i]);
+    printf("current_address = %p\n", current_address);
+
+    current_address = current_address - arg_len;
+
+    printf("args_addr[%d] = %p\n", i, current_address);
+
+    args_addr[i] = current_address;
+    strlcpy(current_address, args[i], arg_len);
+    total_bytes += arg_len;
+  }
+
+  // Word-align
+  for (int i = 0; i < 4 - total_bytes % 4; i++) {
+    current_address -= 1;
+    strlcpy(current_address, "\0", 1);
+  }
+
+  // Null sentinel
+  printf("current_address after args: %p\n", current_address);
+  current_address -= 4;
+  memset(current_address, 0, sizeof(void *));
+
+  // The arguments' addresses onto the stack
+  for (int i = 0; i < argc; i++) {
+    current_address -= 4;
+    memcpy(current_address, &args_addr[i], sizeof(void *));
+  }
+
+  // The address of the array of arguments' addresses
+  void *argc_addr = current_address;
+  current_address -= 4;
+  memcpy(current_address, &argc_addr, sizeof(void *));
+
+  // Number of arguments
+  current_address -= 4;
+  memcpy(current_address, &argc, sizeof(int));
+
+  // Fake return address
+  current_address -= 4;
+  memset(current_address, 0, sizeof(void *));
+
+  // Set %esp to the new top of the stack
+  *esp = current_address;
+
+  printf("esp: %p\n", *esp);
+  hex_dump((unsigned int) *esp, *esp, 150, 1);
 }
