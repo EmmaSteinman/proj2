@@ -91,8 +91,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED)
 {
-  struct thread *t = thread_current();
-  while (t->dead != 1) { printf("%d\n", t->dead); }
+  while (1) {}
   return -1;
 }
 
@@ -368,7 +367,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   success = true;
 
+  printf("dit me\n");
   hex_dump(0, esp, 120, 1);
+  printf("deo me\n");
 
  done:
   /* We arrive here whether the load is successful or not. */
