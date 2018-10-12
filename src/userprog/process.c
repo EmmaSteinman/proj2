@@ -230,16 +230,16 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* */
-  int count = 0;
+  int args_count = 0;
   char *args[128];
   char *args_addr[128];
   char *token, *save_ptr;
 
   for (token = strtok_r (file_name, " ", &save_ptr); token != NULL;
       token = strtok_r (NULL, " ", &save_ptr)){
-        args[count] = token;
+        args[args_count] = token;
         printf ("'%s'\n", token);
-        count++;
+        args_count++;
       }
 
   printf("args[0] = '%s'\n", args[0]);
@@ -331,35 +331,52 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   }
 
-  int *current_address = PHYS_BASE;
+  printf("Before argument parsing: esp = %p\n", *esp);
+
+  void *current_address = *esp;
   int total_bytes = 0;
-  for (int i = 0; i < count; i++) {
-    current_address = current_address - (strlen(args[i] + 1));
+  printf("args_count = %d\n", args_count);
+  for (int i = 0; i < args_count; i++) {
+    int arg_len = strlen(args[i]) + 1;
+    printf("arg len = %d\n", arg_len);
+    printf("args[%d] = '%s'\n", i, args[i]);
+    printf("current_address = %p\n", current_address);
+
+    current_address = current_address - arg_len;
+
+    printf("args_addr[%d] = %p\n", i, current_address);
+
     args_addr[i] = current_address;
-    strlcpy(current_address, args[i], strlen(args[i]));
-    total_bytes += strlen(args[i]) + 1;
+    strlcpy(current_address, args[i], arg_len);
+    total_bytes += arg_len;
+
   }
 
-  for (int i = 0; i < total_bytes % 4; i++) {
+  for (int i = 0; i < 4 - total_bytes % 4; i++) {
     current_address -= 1;
     strlcpy(current_address, "\0", 1);
   }
 
+  printf("current_address after args: %p\n", current_address);
   current_address -= 4;
-  *current_address = 0;
+  memset(current_address, 0, sizeof(void *));
 
-  for (int i = 0; i < count; i++) {
+  for (int i = 0; i < args_count; i++) {
     current_address -= 4;
-    *current_address = args_addr[i];
+    memcpy(current_address, &args_addr[i], sizeof(void *));
   }
 
+  void *argc_addr = current_address;
   current_address -= 4;
-  *current_address = count;
+  memcpy(current_address, &argc_addr, sizeof(void *));
 
   current_address -= 4;
-  *current_address = 0;
+  memcpy(current_address, &args_count, sizeof(int));
 
-  esp = current_address;
+  current_address -= 4;
+  memset(current_address, 0, sizeof(void *));
+
+  *esp = current_address;
 
 
   /* Start address. */
@@ -367,9 +384,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   success = true;
 
-  printf("dit me\n");
-  hex_dump(0, esp, 120, 1);
-  printf("deo me\n");
+  printf("esp: %p\n", *esp);
+  hex_dump(*esp, *esp, 150, 1);
 
  done:
   /* We arrive here whether the load is successful or not. */

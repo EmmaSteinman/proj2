@@ -7,6 +7,9 @@
 #include "threads/vaddr.h"
 
 static void syscall_handler (struct intr_frame *);
+void *get_vaddr(void *uaddr);
+void exit(int status);
+int write(int fd, const void *buffer, unsigned size);
 
 void *get_vaddr(void *uaddr)
 {
@@ -31,7 +34,6 @@ static void
 syscall_handler (struct intr_frame *f) 
 {
   printf ("system call!\n");
-  putbuf("write()\n", 8);
 
   void *esp = f->esp;
   void *vaddr_esp = get_vaddr(esp);
@@ -41,10 +43,19 @@ syscall_handler (struct intr_frame *f)
     int status = *((int *) vaddr_esp + 4);
     exit(status);
   } else if (syscall_number == SYS_WRITE) {
-    write(1, "write()\n", 8);
+    int fd = *((int *) get_vaddr(esp + 4));
+    void *buffer = get_vaddr(esp + 8);
+    int size = *((int *) get_vaddr(esp + 12));
+    // printf("%p %p %p %p\n", esp, esp + 4, esp + 8, esp + 12);
+    // printf("%p %p %p %p\n", get_vaddr(esp), get_vaddr(esp+4), get_vaddr(esp+8),
+    //        get_vaddr(esp+12));
+    // printf("%10d %10d %p %10d\n", syscall_number, fd, buffer, size);
+    // printf("buffer = %p - %p\n", esp + 8, buffer);
+
+    write(fd, esp+8, size);
   }
 
-  //thread_exit ();
+  //thread_exit ()
 }
 
 void exit(int status)
@@ -55,7 +66,10 @@ void exit(int status)
 
 int write(int fd, const void *buffer, unsigned size)
 {
+  printf("write()\n");
   if (fd == 1) {
+    //printf("buffer: %p\n", buffer);
+    //hex_dump(buffer-100, buffer-100, 1000, 1);
     putbuf(buffer, size);
   }
 
