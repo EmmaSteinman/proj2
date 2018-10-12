@@ -15,6 +15,7 @@
 #include "threads/init.h"
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
+#include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
@@ -113,10 +114,11 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED)
+process_wait (tid_t child_tid)
 {
-  while (1) {}
-  return -1;
+  struct thread *t = get_thread(child_tid);
+  sema_down(&t->thread_dying_sema);
+  return 0;
 }
 
 /* Free the current process's resources. */
@@ -144,6 +146,7 @@ process_exit (void)
     }
 
   printf("%s: exit(%d)\n", cur->name, cur->exit_status);
+  sema_up(&cur->thread_dying_sema);
 }
 
 /* Sets up the CPU for running user code in the current
