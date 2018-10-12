@@ -39,20 +39,28 @@ syscall_handler (struct intr_frame *f)
   void *vaddr_esp = get_vaddr(esp);
   int syscall_number = *((int *) vaddr_esp);
 
-  if (syscall_number == SYS_EXIT) {
-    int status = *((int *) vaddr_esp + 4);
-    exit(status);
-  } else if (syscall_number == SYS_WRITE) {
-    int fd = *((int *) get_vaddr(esp + 4));
-    void *buffer = get_vaddr(esp + 8);
-    int size = *((int *) get_vaddr(esp + 12));
-    // printf("%p %p %p %p\n", esp, esp + 4, esp + 8, esp + 12);
-    // printf("%p %p %p %p\n", get_vaddr(esp), get_vaddr(esp+4), get_vaddr(esp+8),
-    //        get_vaddr(esp+12));
-    // printf("%10d %10d %p %10d\n", syscall_number, fd, buffer, size);
-    // printf("buffer = %p - %p\n", esp + 8, buffer);
+  switch (syscall_number) {
+    case SYS_EXIT:
+    {
+      int status = *((int *) get_vaddr(esp + 4));
+      exit(status);
+      break;
+    }
+    case SYS_WRITE:
+    {
+      int fd = *((int *) get_vaddr(esp + 4));
+      void *buffer = get_vaddr(esp + 8);
+      int size = *((int *) get_vaddr(esp + 12));
+      // printf("%p %p %p %p\n", esp, esp + 4, esp + 8, esp + 12);
+      // printf("%p %p %p %p\n", get_vaddr(esp), get_vaddr(esp+4), get_vaddr(esp+8),
+      //        get_vaddr(esp+12));
+      // printf("%10d %10d %p %10d\n", syscall_number, fd, buffer, size);
+      // printf("buffer = %p - %p\n", esp + 8, buffer);
 
-    write(fd, esp+8, size);
+      write(fd, buffer, size);
+
+      break;
+    }
   }
 
   //thread_exit ()
