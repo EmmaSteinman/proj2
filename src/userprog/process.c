@@ -18,6 +18,8 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+#define DEBUG 0
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 static void setup_arguments(int argc, char **argv, void **esp);
@@ -31,8 +33,6 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
-
-  printf("something\n");
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -56,7 +56,6 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
-  printf("123123123\n");
 
   /* Parse arguments */
   int args_count = 0;
@@ -66,11 +65,16 @@ start_process (void *file_name_)
   for (token = strtok_r (file_name, " ", &save_ptr); token != NULL;
       token = strtok_r (NULL, " ", &save_ptr)){
         args[args_count] = token;
-        printf ("'%s'\n", token);
         args_count++;
+
+        #if DEBUG
+        printf ("'%s'\n", token);
+        #endif
       }
 
+  #if DEBUG
   printf("args[0] = '%s'\n", args[0]);
+  #endif
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -138,9 +142,8 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-  printf("%s:exit(%d)\n", cur->name, -1);
 
-  cur->dead = 1;
+  printf("%s: exit(%d)\n", cur->name, cur->exit_status);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -241,7 +244,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
-  printf("123123123\n");
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -331,7 +333,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  printf("1\n");
   if (!setup_stack (esp)) {
     goto done;
   }
@@ -500,22 +501,28 @@ install_page (void *upage, void *kpage, bool writable)
 static void
 setup_arguments(int argc, char **args, void **esp)
 {
-  printf("Before argument parsing: esp = %p\n", *esp);
   char *args_addr[128];
+  #if DEBUG
+  printf("args_count = %d\n", argc);
+  #endif 
 
   // Push the arguments
   void *current_address = *esp;
   int total_bytes = 0;
-  printf("args_count = %d\n", argc);
   for (int i = 0; i < argc; i++) {
     int arg_len = strlen(args[i]) + 1;
+
+    #if DEBUG
     printf("arg len = %d\n", arg_len);
     printf("args[%d] = '%s'\n", i, args[i]);
     printf("current_address = %p\n", current_address);
+    #endif
 
     current_address = current_address - arg_len;
 
+    #if DEBUG
     printf("args_addr[%d] = %p\n", i, current_address);
+    #endif
 
     args_addr[i] = current_address;
     strlcpy(current_address, args[i], arg_len);
@@ -529,7 +536,6 @@ setup_arguments(int argc, char **args, void **esp)
   }
 
   // Null sentinel
-  printf("current_address after args: %p\n", current_address);
   current_address -= 4;
   memset(current_address, 0, sizeof(void *));
 
@@ -555,6 +561,8 @@ setup_arguments(int argc, char **args, void **esp)
   // Set %esp to the new top of the stack
   *esp = current_address;
 
+  #if DEBUG
   printf("esp: %p\n", *esp);
   hex_dump((unsigned int) *esp, *esp, 150, 1);
+  #endif
 }
