@@ -42,8 +42,16 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  /* Extract the actual file name from FILE_NAME */
+  char *full_fn = palloc_get_page(0);
+  if (full_fn == NULL)
+    return TID_ERROR;
+  strlcpy(full_fn, file_name, PGSIZE);
+  char *save_ptr;
+  char *fn = strtok_r(full_fn, " ", &save_ptr);
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (fn, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
   return tid;
@@ -512,7 +520,7 @@ setup_arguments(int argc, char **args, void **esp)
   // Push the arguments
   void *current_address = *esp;
   int total_bytes = 0;
-  for (int i = 0; i < argc; i++) {
+  for (int i = argc - 1; i >= 0; i--) {
     int arg_len = strlen(args[i]) + 1;
 
     #if DEBUG
@@ -543,7 +551,7 @@ setup_arguments(int argc, char **args, void **esp)
   memset(current_address, 0, sizeof(void *));
 
   // The arguments' addresses onto the stack
-  for (int i = 0; i < argc; i++) {
+  for (int i = argc - 1; i >= 0; i--) {
     current_address -= 4;
     memcpy(current_address, &args_addr[i], sizeof(void *));
   }
