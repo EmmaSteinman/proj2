@@ -6,14 +6,27 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "../filesys/file.h"
+#include "../filesys/filesys.h"
 
 #define DEBUG 0
 
 static void syscall_handler (struct intr_frame *);
 void *get_vaddr(void *uaddr);
+void halt(void);
 void exit(int status);
 int write(int fd, const void *buffer, unsigned size);
-void halt(void);
+
+/*
+pid_t exec (const char *cmd_line);
+bool create(const char *file, unsigned initial_size);
+bool remove(const cahr *file);
+int open(const char *file);
+int filesize(int fd);
+int read(int fd, void *buffer, unsigner size);
+unsigned tell(int fd);
+void close(int fd);
+*/
 
 void *get_vaddr(void *uaddr)
 {
@@ -28,13 +41,13 @@ void *get_vaddr(void *uaddr)
 }
 
 void
-syscall_init (void) 
+syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
 static void
-syscall_handler (struct intr_frame *f) 
+syscall_handler (struct intr_frame *f)
 {
   #if DEBUG
   printf ("system call!\n");
@@ -70,6 +83,90 @@ syscall_handler (struct intr_frame *f)
     {
       halt();
     }
+    /*
+    case SYS_CLOSE:
+    {
+      int fd = *((int *) get_vaddr(esp+4));
+
+      close(fd);
+      break;
+    }
+    case SYS_EXEC:
+    {
+      char *cmd_line = *((char *) get_vaddr(esp + 4));
+
+      exec(cmd_line);
+      break;
+    }
+    case SYS_WAIT:
+    {
+      pid_t pid = *(get_vaddr(esp + 4));
+
+      wait(pid);
+      break;
+    }
+    case SYS_CREATE:
+    {
+      char *file = *((char *) get_vaddr(esp + 4));
+      int initial_size = *((int *) get_vaddr(esp + 8));
+
+      create(file, initial_size);
+      break;
+    }
+    case SYS_REMOVE:
+    {
+      char *file = *((char *) get_vaddr(esp + 4));
+
+      remove(file);
+      break;
+    }
+    case SYS_OPEN:
+    {
+      char *file = *((char *) get_vaddr(esp + 4));
+
+      open(file);
+      break;
+    }
+    case SYS_FILESIZE:
+    {
+      int fd = *((int *) get_vaddr(esp + 4));
+
+      filesize(fd);
+      break;
+    }
+    case SYS_READ:
+    {
+      int fd = *((int *) get_vaddr(esp + 4));
+      void **buffer = get_vaddr(esp + 8);
+      int size = *((int *) get_vaddr(esp + 12));
+
+      read(fd, buffer, size);
+      break;
+    }
+    case SYS_SEEK:
+    {
+      int fd = *((int *) get_vaddr(esp + 4));
+      int position = *((int *) get_vaddr(esp + 8));
+
+      seek(fd, position);
+      break;
+    }
+    case SYS_TELL:
+    {
+      int fd = *((int *) get_vaddr(esp + 4));
+
+      tell(fd);
+      break;
+    }
+    case SYS_CLOSE:
+    {
+      int fd = *((int *) get_vaddr(esp + 4));
+
+      clsoe(fd);
+      break;
+    }*/
+
+
   }
 
   //thread_exit ()
@@ -86,6 +183,13 @@ void exit(int status)
   thread_exit();
 }
 
+int filesize(int fd)
+{
+  //Convert fd to file
+  //off_t size = file_length(file)
+  return 1;
+}
+
 int write(int fd, const void *buffer, unsigned size)
 {
   #if DEBUG
@@ -96,8 +200,8 @@ int write(int fd, const void *buffer, unsigned size)
     //printf("buffer: %p\n", buffer);
     //hex_dump(buffer-100, buffer-100, 1000, 1);
     putbuf(buffer, size);
+    return size;
   }
 
   return 0;
 }
-

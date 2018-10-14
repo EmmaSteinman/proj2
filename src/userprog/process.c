@@ -515,7 +515,7 @@ setup_arguments(int argc, char **args, void **esp)
   char *args_addr[128];
   #if DEBUG
   printf("args_count = %d\n", argc);
-  #endif 
+  #endif
 
   // Push the arguments
   void *current_address = *esp;
