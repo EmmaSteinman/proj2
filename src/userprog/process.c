@@ -126,7 +126,7 @@ process_wait (tid_t child_tid)
 {
   struct thread *t = get_thread(child_tid);
   sema_down(&t->thread_dying_sema);
-  return 0;
+  return t->exit_status;
 }
 
 /* Free the current process's resources. */

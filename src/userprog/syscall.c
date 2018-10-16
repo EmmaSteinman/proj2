@@ -16,16 +16,18 @@ void *get_vaddr(void *uaddr);
 void halt(void);
 void exit(int status);
 int write(int fd, const void *buffer, unsigned size);
+int open(const char *file);
 
-/*
+/*  REMAINING SYSTEM CALLS TO IMPLETMENT
+
 pid_t exec (const char *cmd_line);
 bool create(const char *file, unsigned initial_size);
 bool remove(const cahr *file);
-int open(const char *file);
 int filesize(int fd);
 int read(int fd, void *buffer, unsigner size);
 unsigned tell(int fd);
 void close(int fd);
+int wait(pid_t pid);
 */
 
 void *get_vaddr(void *uaddr)
@@ -83,6 +85,13 @@ syscall_handler (struct intr_frame *f)
     {
       halt();
     }
+    case SYS_OPEN:
+    {
+      char **file = (char *) get_vaddr(esp + 4);
+
+      open(*file);
+      break;
+    }
     /*
     case SYS_CLOSE:
     {
@@ -118,13 +127,6 @@ syscall_handler (struct intr_frame *f)
       char *file = *((char *) get_vaddr(esp + 4));
 
       remove(file);
-      break;
-    }
-    case SYS_OPEN:
-    {
-      char *file = *((char *) get_vaddr(esp + 4));
-
-      open(file);
       break;
     }
     case SYS_FILESIZE:
@@ -183,13 +185,6 @@ void exit(int status)
   thread_exit();
 }
 
-int filesize(int fd)
-{
-  //Convert fd to file
-  //off_t size = file_length(file)
-  return 1;
-}
-
 int write(int fd, const void *buffer, unsigned size)
 {
   #if DEBUG
@@ -202,6 +197,38 @@ int write(int fd, const void *buffer, unsigned size)
     putbuf(buffer, size);
     return size;
   }
+  /*
+  else{
+    int current = tell(fd);
+    int file_size = filesize(fd);
 
+    if(file_size-current>size){
+      return size;
+      }
+    else{
+      return max(file_size-current|0);
+    }
+  }*/
   return 0;
 }
+
+int open(const char *file)
+{
+  struct thread *t = thread_current();
+  int fd = t->current_fd;
+  struct file *file_1 = filesys_open(file);
+  t->fd_array[fd] = file_1;
+  t->current_fd ++;
+
+  return fd;
+}
+
+/*
+int filesize(int fd)
+{
+  //Convert fd to file
+  //off_t size = file_length(file)
+  //return size;
+  return 1;
+}
+*/
