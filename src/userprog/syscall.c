@@ -38,7 +38,7 @@ void *get_vaddr(void *uaddr)
 
   struct thread* t = thread_current();
   void *vaddr = pagedir_get_page(t->pagedir, uaddr);
-
+  
   return vaddr;
 }
 
@@ -59,6 +59,9 @@ syscall_handler (struct intr_frame *f)
   void *vaddr_esp = get_vaddr(esp);
   int syscall_number = *((int *) vaddr_esp);
 
+  int retval = 0;
+  bool has_retval = false;
+
   switch (syscall_number) {
     case SYS_EXIT:
     {
@@ -71,13 +74,9 @@ syscall_handler (struct intr_frame *f)
       int fd = *((int *) get_vaddr(esp + 4));
       void **buffer = get_vaddr(esp + 8);
       int size = *((int *) get_vaddr(esp + 12));
-      // printf("%p %p %p %p\n", esp, esp + 4, esp + 8, esp + 12);
-      // printf("%p %p %p %p\n", get_vaddr(esp), get_vaddr(esp+4), get_vaddr(esp+8),
-      //        get_vaddr(esp+12));
-      // printf("%10d %10d %p %10d\n", syscall_number, fd, buffer, size);
-      // printf("buffer = %p - %p\n", esp + 8, buffer);
 
-      write(fd, *buffer, size);
+      retval = write(fd, *buffer, size);
+      has_retval = true;
 
       break;
     }
@@ -87,9 +86,11 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_OPEN:
     {
-      char **file = (char *) get_vaddr(esp + 4);
+      char **filename_addr_ptr = get_vaddr(esp + 4);
+      char *filename = get_vaddr(*filename_addr_ptr);
 
-      open(*file);
+      retval = open(filename);
+      has_retval = true;
       break;
     }
     /*
@@ -171,7 +172,10 @@ syscall_handler (struct intr_frame *f)
 
   }
 
-  //thread_exit ()
+  // put the return value back on the user's stack if needed
+  if (has_retval) {
+    f->eax = retval;
+  }
 }
 
 void halt(void)
@@ -214,11 +218,20 @@ int write(int fd, const void *buffer, unsigned size)
 
 int open(const char *file)
 {
+  if (file == NULL) {
+    exit(-1);
+  }
+
   struct thread *t = thread_current();
   int fd = t->current_fd;
+
   struct file *file_1 = filesys_open(file);
+  if (file_1 == NULL) {
+    return -1;
+  }
+
   t->fd_array[fd] = file_1;
-  t->current_fd ++;
+  t->current_fd++;
 
   return fd;
 }
