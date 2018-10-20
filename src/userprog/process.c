@@ -520,9 +520,6 @@ static void
 setup_arguments(int argc, char **args, void **esp)
 {
   char *args_addr[128];
-  #if DEBUG
-  printf("args_count = %d\n", argc);
-  #endif
 
   // Push the arguments
   void *current_address = *esp;
@@ -530,17 +527,7 @@ setup_arguments(int argc, char **args, void **esp)
   for (int i = argc - 1; i >= 0; i--) {
     int arg_len = strlen(args[i]) + 1;
 
-    #if DEBUG
-    printf("arg len = %d\n", arg_len);
-    printf("args[%d] = '%s'\n", i, args[i]);
-    printf("current_address = %p\n", current_address);
-    #endif
-
     current_address = current_address - arg_len;
-
-    #if DEBUG
-    printf("args_addr[%d] = %p\n", i, current_address);
-    #endif
 
     args_addr[i] = current_address;
     strlcpy(current_address, args[i], arg_len);
@@ -578,11 +565,6 @@ setup_arguments(int argc, char **args, void **esp)
 
   // Set %esp to the new top of the stack
   *esp = current_address;
-
-  #if DEBUG
-  printf("esp: %p\n", *esp);
-  hex_dump((unsigned int) *esp, *esp, 150, 1);
-  #endif
 }
 
 struct process*
