@@ -464,6 +464,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   t->current_fd = 2;
+  t->exit_status = -1;
 
   sema_init(&t->thread_dying_sema, 0);
 

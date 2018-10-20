@@ -27,11 +27,9 @@ int filesize(int fd);
 unsigned tell(int fd);
 void seek(int fd, unsigned position);
 pid_t exec (const char *cmd_line);
-
-
-
 bool remove(const char *file);
 int read(int fd, void *buffer, unsigned size);
+
 
 /*  REMAINING SYSTEM CALLS TO IMPLETMENT
 int wait(pid_t pid);
