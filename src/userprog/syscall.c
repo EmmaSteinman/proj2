@@ -12,7 +12,9 @@
 #define DEBUG 0
 
 static void syscall_handler (struct intr_frame *);
-void *get_vaddr(void *uaddr);
+static void *get_vaddr(void *uaddr);
+static void *sc_get_arg(int pos, void *esp);
+
 void halt(void);
 void exit(int status);
 int write(int fd, const void *buffer, unsigned size);
@@ -31,7 +33,7 @@ int read(int fd, void *buffer, unsigner size);
 int wait(pid_t pid);
 */
 
-void *get_vaddr(void *uaddr)
+static void *get_vaddr(void *uaddr)
 {
   if (uaddr == NULL || !is_user_vaddr(uaddr)) {
     return NULL;
@@ -43,6 +45,18 @@ void *get_vaddr(void *uaddr)
   return vaddr;
 }
 
+static void *sc_get_arg(int pos, void *esp)
+{
+  void *arg = esp + sizeof(void *) * pos;
+  void *vaddr_arg = get_vaddr(arg);
+
+  if (vaddr_arg == NULL) {
+    exit(-1);
+  }
+
+  return vaddr_arg;
+}
+
 void
 syscall_init (void)
 {
@@ -52,12 +66,12 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f)
 {
-  #if DEBUG
-  printf ("system call!\n");
-  #endif
-
   void *esp = f->esp;
   void *vaddr_esp = get_vaddr(esp);
+  if (vaddr_esp == NULL || get_vaddr(esp + 3) == NULL) {
+    exit(-1);
+  }
+
   int syscall_number = *((int *) vaddr_esp);
 
   int retval = 0;
@@ -69,15 +83,15 @@ syscall_handler (struct intr_frame *f)
   switch (syscall_number) {
     case SYS_EXIT:
     {
-      int status = *((int *) get_vaddr(esp + 4));
+      int status = *((int *) sc_get_arg(1, esp));
       exit(status);
       break;
     }
     case SYS_WRITE:
     {
-      int fd = *((int *) get_vaddr(esp + 4));
-      void **buffer = get_vaddr(esp + 8);
-      int size = *((int *) get_vaddr(esp + 12));
+      int fd = *((int *) sc_get_arg(1, esp));
+      void **buffer = sc_get_arg(2, esp);;
+      int size = *((int *) sc_get_arg(3, esp));
 
       retval = write(fd, *buffer, size);
       has_retval = true;
@@ -90,7 +104,7 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_OPEN:
     {
-      char **filename_addr_ptr = get_vaddr(esp + 4);
+      char **filename_addr_ptr = sc_get_arg(1, esp);
       char *filename = get_vaddr(*filename_addr_ptr);
 
       retval = open(filename);
@@ -99,8 +113,9 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_CREATE:
     {
-      char *file = *((char *) get_vaddr(esp + 4));
-      int initial_size = *((int *) get_vaddr(esp + 8));
+      char **file_addr = sc_get_arg(1, esp);
+      char *file = get_vaddr(*file_addr);
+      int initial_size = *((int *) sc_get_arg(2, esp));
 
       retval_bool = create(file, initial_size);
       has_retval_bool = true;
@@ -144,7 +159,7 @@ syscall_handler (struct intr_frame *f)
     */
     case SYS_FILESIZE:
     {
-      int fd = *((int *) get_vaddr(esp + 4));
+      int fd = *((int *) sc_get_arg(1, esp));
 
       retval = filesize(fd);
       has_retval = true;
@@ -152,15 +167,15 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_SEEK:
     {
-      int fd = *((int *) get_vaddr(esp + 4));
-      int position = *((int *) get_vaddr(esp + 8));
+      int fd = *((int *) sc_get_arg(1, esp));
+      int position = *((int *) sc_get_arg(2, esp));
 
       seek(fd, position);
       break;
     }
     case SYS_TELL:
     {
-      int fd = *((int *) get_vaddr(esp + 4));
+      int fd = *((int *) sc_get_arg(1, esp));
 
       retval = tell(fd);
       has_retval = true;
@@ -169,7 +184,7 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_CLOSE:
     {
-      int fd = *((int *) get_vaddr(esp + 4));
+      int fd = *((int *) sc_get_arg(1, esp));
 
       close(fd);
     }
