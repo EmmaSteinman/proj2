@@ -9,6 +9,7 @@
 #include "../filesys/file.h"
 #include "../filesys/filesys.h"
 #include "process.h"
+#include "devices/input.h"
 
 #define DEBUG 0
 
@@ -26,11 +27,13 @@ int filesize(int fd);
 unsigned tell(int fd);
 void seek(int fd, unsigned position);
 pid_t exec (const char *cmd_line);
-/*  REMAINING SYSTEM CALLS TO IMPLETMENT
+
 
 
 bool remove(const cahr *file);
 int read(int fd, void *buffer, unsigner size);
+
+/*  REMAINING SYSTEM CALLS TO IMPLETMENT
 int wait(pid_t pid);
 */
 
@@ -76,7 +79,7 @@ syscall_handler (struct intr_frame *f)
   int syscall_number = *((int *) vaddr_esp);
 
   int retval = 0;
-  bool retval_bool = true;  //DOES IT MATTER WHAT IT IS INITIALIZED TO
+  bool retval_bool = true;
   bool has_retval = false;
   bool has_retval_bool = false;
 
@@ -94,7 +97,7 @@ syscall_handler (struct intr_frame *f)
       void **buffer = sc_get_arg(2, esp);;
       int size = *((int *) sc_get_arg(3, esp));
 
-      retval = write(fd, *buffer, size);
+      retval = write(fd, get_vaddr(*buffer), size);
       has_retval = true;
 
       break;
@@ -133,32 +136,33 @@ syscall_handler (struct intr_frame *f)
     /*
     case SYS_WAIT:
     {
-      pid_t pid = *(get_vaddr(esp + 4));
+      pid_t pid = *(sc_get_arg(1, esp));
 
       retval = wait(pid);
       has_retval = true;
       break;
     }
+    */
+
     case SYS_REMOVE:
     {
-      char *file = *((char *) get_vaddr(esp + 4));
+      char **filename_addr_ptr = sc_get_arg(1, esp);
+      char *filename = get_vaddr(*filename_addr_ptr);
 
-      retval_bool = remove(file);
+      retval_bool = remove(filename);
       has_retval_bool = true;
       break;
     }
     case SYS_READ:
     {
-      int fd = *((int *) get_vaddr(esp + 4));
-      void **buffer = get_vaddr(esp + 8);
-      int size = *((int *) get_vaddr(esp + 12));
+      int fd = *((int *) sc_get_arg(1, esp));
+      void **buffer = sc_get_arg(2, esp);;
+      int size = *((int *) sc_get_arg(3, esp));
 
-      retval = read(fd, buffer, size);
+      retval = read(fd, get_vaddr(*buffer), size);
       has_retval = true;
-
       break;
     }
-    */
     case SYS_FILESIZE:
     {
       int fd = *((int *) sc_get_arg(1, esp));
@@ -239,29 +243,29 @@ pid_t exec (const char *cmd_line)
 
 int write(int fd, const void *buffer, unsigned size)
 {
-  #if DEBUG
-  printf("write()\n");
-  #endif
+  struct thread *t = thread_current();
+  struct file *file;
 
+  if (buffer == NULL) {
+    exit(-1);
+  }
   if (fd == 1) {
     //printf("buffer: %p\n", buffer);
     //hex_dump(buffer-100, buffer-100, 1000, 1);
     putbuf(buffer, size);
     return size;
   }
-  /*
+  if(fd < t->current_fd){
+     file = t->fd_array[fd];
+  }
   else{
-    int current = tell(fd);
-    int file_size = filesize(fd);
+    file = NULL;
+  }
+  if (file == NULL){
+    exit(-1);
+  }
 
-    if(file_size-current>size){
-      return size;
-      }
-    else{
-      return max(file_size-current|0);
-    }
-  }*/
-  return 0;
+  return file_write(file, buffer, size);
 }
 
 int open(const char *file)
@@ -299,20 +303,44 @@ void close(int fd){
 
 int filesize(int fd)
 {
-  struct file *file = thread_current()->fd_array[fd];
+  struct thread *t = thread_current();
+  struct file *file;
+
+  if(fd < t->current_fd){
+     file = t->fd_array[fd];
+  }
+  else{
+    file = NULL;
+  }
   off_t size = file_length(file);
   return size;
 }
 
 unsigned tell(int fd){
-  struct file *file = thread_current()->fd_array[fd];
+  struct thread *t = thread_current();
+  struct file *file;
+
+  if(fd < t->current_fd){
+     file = t->fd_array[fd];
+  }
+  else{
+    file = NULL;
+  }
   off_t tell = file_tell(file);
 
   return tell;
 }
 
 void seek(int fd, unsigned position){
-  struct file *file = thread_current()->fd_array[fd];
+  struct thread *t = thread_current();
+  struct file *file;
+
+  if(fd < t->current_fd){
+     file = t->fd_array[fd];
+  }
+  else{
+    file = NULL;
+  }
 
   file_seek(file, position);
 }
@@ -323,4 +351,41 @@ bool create(const char *file, unsigned initial_size){
   }
 
   return filesys_create(file, initial_size);
+}
+
+int read(int fd, void *buffer, unsigned size){
+  struct thread *t = thread_current();
+  struct file *file;
+  char *letter = buffer;
+
+  if (buffer == NULL) {
+    exit(-1);
+  }
+
+  if (fd == 0){
+    for(int i  =0;i < (int)size; i++){
+      letter[i] = input_getc();
+    }
+    return size;
+  }
+
+  if(fd < t->current_fd){
+     file = t->fd_array[fd];
+  }
+  else{
+    file = NULL;
+  }
+  if (file == NULL){
+    exit(-1);
+  }
+
+  return file_read(file, buffer, size);
+}
+
+bool remove(const char *file){
+  if (file == NULL) {
+    exit(-1);
+  }
+
+  return filesys_remove(file);
 }
