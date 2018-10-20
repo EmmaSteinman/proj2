@@ -8,6 +8,7 @@
 #include "threads/vaddr.h"
 #include "../filesys/file.h"
 #include "../filesys/filesys.h"
+#include "process.h"
 #include "devices/input.h"
 
 #define DEBUG 0
@@ -25,12 +26,14 @@ void close(int fd);
 int filesize(int fd);
 unsigned tell(int fd);
 void seek(int fd, unsigned position);
-int read(int fd, void *buffer, unsigned size);
+pid_t exec (const char *cmd_line);
+
+
+
 bool remove(const char *file);
+int read(int fd, void *buffer, unsigned size);
 
 /*  REMAINING SYSTEM CALLS TO IMPLETMENT
-
-pid_t exec (const char *cmd_line);
 int wait(pid_t pid);
 */
 
@@ -123,14 +126,14 @@ syscall_handler (struct intr_frame *f)
       break;
     }
 
-    /*
     case SYS_EXEC:
     {
-      char *cmd_line = *((char *) sc_get_arg(1, esp));
+      char *cmd_line = sc_get_arg(1, esp);
 
       exec(cmd_line);
       break;
     }
+    /*
     case SYS_WAIT:
     {
       pid_t pid = *(sc_get_arg(1, esp));
@@ -211,6 +214,31 @@ void exit(int status)
 {
   thread_current()->exit_status = status;
   thread_exit();
+}
+
+pid_t exec (const char *cmd_line)
+{
+  if (cmd_line == NULL)
+    return -1;
+
+  struct thread* current = thread_current();
+  struct process* new_process;
+  struct child* new_child;
+
+  pid_t p = process_execute(cmd_line);
+  if (p != TID_ERROR){
+    new_process = palloc_get_page (0);
+    new_child = palloc_get_page (0);
+    list_init(&new_process->child_list);
+    new_process-> pid = p;
+    new_child-> pid = p;
+    new_child->parent_pid = &current->tid;
+    new_child->exit_status = NULL;
+    sema_init(&new_child->child_sema, 0);
+    process_add_child(new_child);
+    process_add(new_process);
+  }
+  return p;
 }
 
 int write(int fd, const void *buffer, unsigned size)
