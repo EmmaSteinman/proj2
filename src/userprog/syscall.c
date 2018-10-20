@@ -17,16 +17,17 @@ void halt(void);
 void exit(int status);
 int write(int fd, const void *buffer, unsigned size);
 int open(const char *file);
+bool create(const char *file, unsigned initial_size);
+void close(int fd);
+int filesize(int fd);
+unsigned tell(int fd);
+void seek(int fd, unsigned position);
 
 /*  REMAINING SYSTEM CALLS TO IMPLETMENT
 
 pid_t exec (const char *cmd_line);
-bool create(const char *file, unsigned initial_size);
 bool remove(const cahr *file);
-int filesize(int fd);
 int read(int fd, void *buffer, unsigner size);
-unsigned tell(int fd);
-void close(int fd);
 int wait(pid_t pid);
 */
 
@@ -38,7 +39,7 @@ void *get_vaddr(void *uaddr)
 
   struct thread* t = thread_current();
   void *vaddr = pagedir_get_page(t->pagedir, uaddr);
-  
+
   return vaddr;
 }
 
@@ -60,7 +61,10 @@ syscall_handler (struct intr_frame *f)
   int syscall_number = *((int *) vaddr_esp);
 
   int retval = 0;
+  bool retval_bool = true;  //DOES IT MATTER WHAT IT IS INITIALIZED TO
   bool has_retval = false;
+  bool has_retval_bool = false;
+
 
   switch (syscall_number) {
     case SYS_EXIT:
@@ -93,14 +97,16 @@ syscall_handler (struct intr_frame *f)
       has_retval = true;
       break;
     }
-    /*
-    case SYS_CLOSE:
+    case SYS_CREATE:
     {
-      int fd = *((int *) get_vaddr(esp+4));
+      char *file = *((char *) get_vaddr(esp + 4));
+      int initial_size = *((int *) get_vaddr(esp + 8));
 
-      close(fd);
+      retval_bool = create(file, initial_size);
+      has_retval_bool = true;
       break;
     }
+    /*
     case SYS_EXEC:
     {
       char *cmd_line = *((char *) get_vaddr(esp + 4));
@@ -112,29 +118,16 @@ syscall_handler (struct intr_frame *f)
     {
       pid_t pid = *(get_vaddr(esp + 4));
 
-      wait(pid);
-      break;
-    }
-    case SYS_CREATE:
-    {
-      char *file = *((char *) get_vaddr(esp + 4));
-      int initial_size = *((int *) get_vaddr(esp + 8));
-
-      create(file, initial_size);
+      retval = wait(pid);
+      has_retval = true;
       break;
     }
     case SYS_REMOVE:
     {
       char *file = *((char *) get_vaddr(esp + 4));
 
-      remove(file);
-      break;
-    }
-    case SYS_FILESIZE:
-    {
-      int fd = *((int *) get_vaddr(esp + 4));
-
-      filesize(fd);
+      retval_bool = remove(file);
+      has_retval_bool = true;
       break;
     }
     case SYS_READ:
@@ -143,7 +136,18 @@ syscall_handler (struct intr_frame *f)
       void **buffer = get_vaddr(esp + 8);
       int size = *((int *) get_vaddr(esp + 12));
 
-      read(fd, buffer, size);
+      retval = read(fd, buffer, size);
+      has_retval = true;
+
+      break;
+    }
+    */
+    case SYS_FILESIZE:
+    {
+      int fd = *((int *) get_vaddr(esp + 4));
+
+      retval = filesize(fd);
+      has_retval = true;
       break;
     }
     case SYS_SEEK:
@@ -158,23 +162,25 @@ syscall_handler (struct intr_frame *f)
     {
       int fd = *((int *) get_vaddr(esp + 4));
 
-      tell(fd);
+      retval = tell(fd);
+      has_retval = true;
+
       break;
     }
     case SYS_CLOSE:
     {
       int fd = *((int *) get_vaddr(esp + 4));
 
-      clsoe(fd);
-      break;
-    }*/
-
-
+      close(fd);
+    }
   }
 
   // put the return value back on the user's stack if needed
   if (has_retval) {
     f->eax = retval;
+  }
+  else if (has_retval_bool) {
+    f->eax = retval_bool;
   }
 }
 
@@ -236,12 +242,43 @@ int open(const char *file)
   return fd;
 }
 
-/*
+void close(int fd){
+  struct thread *t = thread_current();
+  struct file *file;
+  if(fd < t->current_fd){
+     file = t->fd_array[fd];
+     t->fd_array[fd] = NULL;
+  }
+  else{
+    file = NULL;
+  }
+  file_close(file);
+}
+
 int filesize(int fd)
 {
-  //Convert fd to file
-  //off_t size = file_length(file)
-  //return size;
-  return 1;
+  struct file *file = thread_current()->fd_array[fd];
+  off_t size = file_length(file);
+  return size;
 }
-*/
+
+unsigned tell(int fd){
+  struct file *file = thread_current()->fd_array[fd];
+  off_t tell = file_tell(file);
+
+  return tell;
+}
+
+void seek(int fd, unsigned position){
+  struct file *file = thread_current()->fd_array[fd];
+
+  file_seek(file, position);
+}
+
+bool create(const char *file, unsigned initial_size){
+  if (file == NULL) {
+    exit(-1);
+  }
+
+  return filesys_create(file, initial_size);
+}
