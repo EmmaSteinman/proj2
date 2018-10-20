@@ -21,6 +21,9 @@
 
 #define DEBUG 0
 
+static struct list process_list;
+
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 static void setup_arguments(int argc, char **argv, void **esp);
@@ -54,6 +57,10 @@ process_execute (const char *file_name)
   tid = thread_create (fn, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
+
+  /* Enter new process in process list */
+
+
   return tid;
 }
 
@@ -576,4 +583,31 @@ setup_arguments(int argc, char **args, void **esp)
   printf("esp: %p\n", *esp);
   hex_dump((unsigned int) *esp, *esp, 150, 1);
   #endif
+}
+
+struct process*
+get_process(pid_t p)
+{
+  struct list_elem *e;
+  for (e = list_begin (&process_list); e != list_end (&process_list);
+       e = list_next (e))
+    {
+      struct process *proc = list_entry (e, struct process, procelem);
+      if (proc->pid == p)
+        return proc;
+    }
+  return NULL;
+}
+
+void
+process_add(struct process* proc)
+{
+  list_push_back(&process_list, &proc);
+}
+
+void
+process_add_child(struct child* ch)
+{
+  struct process* proc = get_process(ch->parent_pid);
+  list_push_back(&proc->child_list, &ch);
 }
