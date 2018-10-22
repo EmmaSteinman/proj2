@@ -130,7 +130,7 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_WAIT:
     {
-      pid_t pid = *(sc_get_arg(1, esp));
+      pid_t pid = *(pid_t*) (sc_get_arg(1, esp));
 
       retval = wait(pid);
       has_retval = true;
