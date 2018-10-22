@@ -4,10 +4,11 @@
 #include <stdio.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
+#include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "../filesys/file.h"
-#include "../filesys/filesys.h"
+#include "filesys/file.h"
+#include "filesys/filesys.h"
 #include "process.h"
 #include "devices/input.h"
 
@@ -29,11 +30,7 @@ void seek(int fd, unsigned position);
 pid_t exec (const char *cmd_line);
 bool remove(const char *file);
 int read(int fd, void *buffer, unsigned size);
-
-
-/*  REMAINING SYSTEM CALLS TO IMPLETMENT
 int wait(pid_t pid);
-*/
 
 static void *get_vaddr(void *uaddr)
 {
@@ -228,11 +225,13 @@ pid_t exec (const char *cmd_line)
     new_process = palloc_get_page (0);
     new_child = palloc_get_page (0);
     list_init(&new_process->child_list);
+
     new_process-> pid = p;
     new_child-> pid = p;
-    new_child->parent_pid = &current->tid;
-    new_child->exit_status = NULL;
+    new_child->parent_pid = current->tid;
+    new_child->exit_status = -1;
     sema_init(&new_child->child_sema, 0);
+    
     process_add_child(new_child);
     process_add(new_process);
   }
