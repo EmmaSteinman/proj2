@@ -29,11 +29,8 @@ void seek(int fd, unsigned position);
 pid_t exec (const char *cmd_line);
 bool remove(const char *file);
 int read(int fd, void *buffer, unsigned size);
-
-
-/*  REMAINING SYSTEM CALLS TO IMPLETMENT
 int wait(pid_t pid);
-*/
+
 
 static void *get_vaddr(void *uaddr)
 {
@@ -131,7 +128,6 @@ syscall_handler (struct intr_frame *f)
       exec(cmd_line);
       break;
     }
-    /*
     case SYS_WAIT:
     {
       pid_t pid = *(sc_get_arg(1, esp));
@@ -140,8 +136,6 @@ syscall_handler (struct intr_frame *f)
       has_retval = true;
       break;
     }
-    */
-
     case SYS_REMOVE:
     {
       char **filename_addr_ptr = sc_get_arg(1, esp);
@@ -217,7 +211,7 @@ void exit(int status)
 pid_t exec (const char *cmd_line)
 {
   if (cmd_line == NULL)
-    return -1;
+    exit(-1);
 
   struct thread* current = thread_current();
   struct process* new_process;
@@ -237,6 +231,38 @@ pid_t exec (const char *cmd_line)
     process_add(new_process);
   }
   return p;
+}
+
+
+int wait(pid_t pid)
+{
+  struct thread *t = thread_current();
+  struct process *parent = get_process(t->tid);
+  struct list child_list = parent->child_list;
+  struct child *c = NULL;
+  struct list_elem *e;
+  int exit_status;
+
+  for (e = list_begin (&child_list); e != list_end (&child_list);
+       e = list_next (e))
+    {
+      struct child *current = list_entry (e, struct child, childelem);
+      if (current->pid == pid){
+        c = current;
+        list_remove(e);
+        break;
+      }
+    }
+  if (c == NULL)
+    return -1;
+
+  sema_down(&c->child_sema);
+
+  exit_status = c->exit_status;
+
+  palloc_free_page(c);
+
+  return exit_status;
 }
 
 int write(int fd, const void *buffer, unsigned size)
