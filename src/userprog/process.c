@@ -584,12 +584,12 @@ get_process(pid_t p)
 void
 process_add(struct process* proc)
 {
-  list_push_back(&process_list, &proc);
+  list_push_back(&process_list, &proc->procelem);
 }
 
 void
 process_add_child(struct child* ch)
 {
   struct process* proc = get_process(ch->parent_pid);
-  list_push_back(&proc->child_list, &ch);
+  list_push_back(&proc->child_list, &ch->childelem);
 }

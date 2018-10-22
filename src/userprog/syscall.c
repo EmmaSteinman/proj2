@@ -253,13 +253,12 @@ int wait(pid_t pid)
         break;
       }
     }
-  if (c == NULL)
-    return -1;
+  if (c == NULL) //not working - wait-bad-ptr does not exit here
+    exit(-1);
 
-  sema_down(&c->child_sema);
+  sema_down(&c->child_sema); //where should we call sema_up?
 
   exit_status = c->exit_status;
-
   palloc_free_page(c);
 
   return exit_status;
