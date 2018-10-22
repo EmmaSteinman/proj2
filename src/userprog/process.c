@@ -21,8 +21,6 @@
 
 #define DEBUG 0
 
-static struct list process_list;
-
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -59,7 +57,15 @@ process_execute (const char *file_name)
     palloc_free_page (fn_copy);
 
   /* Enter new process in process list */
-
+  if (tid != TID_ERROR) {
+    struct process *new_process = palloc_get_page(0);
+    if (new_process != NULL) {
+      new_process->pid = tid;
+      new_process->parent_pid = thread_current()->tid;
+      list_init(&new_process->child_list);
+      process_add(new_process);
+    }
+  }
 
   return tid;
 }
@@ -82,15 +88,7 @@ start_process (void *file_name_)
       token = strtok_r (NULL, " ", &save_ptr)){
         args[args_count] = token;
         args_count++;
-
-        #if DEBUG
-        printf ("'%s'\n", token);
-        #endif
       }
-
-  #if DEBUG
-  printf("args[0] = '%s'\n", args[0]);
-  #endif
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -162,6 +160,17 @@ process_exit (void)
 
   printf("%s: exit(%d)\n", cur->name, cur->exit_status);
   sema_up(&cur->thread_dying_sema);
+
+  struct process* current_proc = get_process(cur->tid);
+  struct process* parent_proc = get_process(current_proc->parent_pid);
+  if (parent_proc != NULL) {
+    struct list_elem *child = get_child_process(parent_proc->pid, current_proc->pid);
+
+    if (child != NULL) {
+      struct child *child_proc = list_entry (child, struct child, childelem);
+      sema_up(&child_proc->child_sema);
+    }
+  }
 }
 
 /* Sets up the CPU for running user code in the current
@@ -269,7 +278,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
-
   /* Open executable file. */
   file = filesys_open (file_name);
   if (file == NULL)
@@ -359,6 +367,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   *eip = (void (*) (void)) ehdr.e_entry;
 
   success = true;
+
+  //struct process* proc = get_process(tid);
 
  done:
   /* We arrive here whether the load is successful or not. */
@@ -584,12 +594,31 @@ get_process(pid_t p)
 void
 process_add(struct process* proc)
 {
-  list_push_back(&process_list, &proc);
+  list_push_back(&process_list, &proc->procelem);
 }
 
 void
 process_add_child(struct child* ch)
 {
   struct process* proc = get_process(ch->parent_pid);
-  list_push_back(&proc->child_list, &ch);
+  list_push_back(&proc->child_list, &ch->childelem);
+}
+
+struct list_elem*
+get_child_process(pid_t parent_pid, pid_t child_pid)
+{
+  struct process *parent = get_process(parent_pid);
+  struct list child_list = parent->child_list;
+  struct list_elem *e;
+
+  for (e = list_begin (&child_list); e != list_end (&child_list);
+       e = list_next (e))
+    {
+      struct child *current = list_entry (e, struct child, childelem);
+      if (current->pid == child_pid){
+        return e;
+      }
+    }
+
+  return NULL;
 }
