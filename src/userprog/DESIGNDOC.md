@@ -7,9 +7,9 @@
 
 > Fill in the name and email addresses of your group members.
 
-- FirstName LastName <email@domain.example>
-- FirstName LastName <email@domain.example>
-- FirstName LastName <email@domain.example>
+- Quan Tran <tran_q1@denison.edu>
+- Brett Weicht <weicht_b1@denison.edu>
+- Emma Steinman <steinm_e1@denison.edu>
 
 ## PRELIMINARIES
 
@@ -32,11 +32,15 @@
 > `struct` member, `global` or `static` variable, `typedef`, or
 > enumeration.  Document the purpose of each in 25 words or less.
 
+
+
 #### ALGORITHMS
 
 > A2: Briefly describe how you implemented argument parsing.  How do
 > you arrange for the elements of argv[] to be in the right order?
 > How do you avoid overflowing the stack page?
+
+  * First we get parse the arguments from the parameter into an array. We pass this into our function which then sets up the stack. It pushes each argument onto the stack in the order in which it is in the array. Then we add null bits to ensure word alignment. We then iterate through the argument array once more but pushing the address of the argument instead of the argument itself. Since we are putting pointers to the arguments, the order of the arguments themselves are not important, as long as the addresses and arguments are in the same order. 
 
 #### RATIONALE/JUSTIFICATION
 
@@ -54,9 +58,52 @@
 > `struct` member, `global` or `static` variable, `typedef`, or
 > enumeration.  Document the purpose of each in 25 words or less.
 
+* New `struct process`
+```
+struct process {
+  pid_t pid;
+  pid_t parent_pid;
+  struct list child_list;
+  struct list_elem procelem;
+};
+```
+  * Holds a process' pid, parent's pid, list of all children, allowing us to maintain relationships between parent and child
+
+* New `struct child`
+```
+struct child {
+  pid_t pid;
+  pid_t parent_pid;
+  int exit_status;
+  struct semaphore child_sema;
+  struct list_elem childelem;
+};
+```
+  * A struct for a child process, holding pid, parent_pid, exit status, and a semaphore, allowing us to check exit status and use appropriate synchronization
+
+* New `struct list process_list`
+  * A list of all processes, where each element is a pointer to a process struct, allowing us to keep track of all processes and their children
+
+* Changes to `struct thread`
+  * `struct file *fd_array[SCHAR_MAX];`
+    * An array to hold file descriptors to ensure uniqueness
+  * `int current_fd;`
+    * The current index of fd_array, aka the next fd to be assignede
+  * `struct semaphore thread_dying_sema;`
+    * A semaphore to notify when the thread is dying
+  * `int exit_status;`
+    * Holds thread's exit status
+  * `struct semaphore load_done_sema;`
+    * Semaphore to ensure exec does not return before load is compmlete
+  * `bool load_success;`
+    * Indicates if load is successful or not, for exec syscall
+
+
 > B2: Describe how file descriptors are associated with open files.
 > Are file descriptors unique within the entire OS or just within a
 > single process?
+
+  * File descriptors refer to an instance of an open file. They are only unique to a single process, as a process would only access an instance of a file within itself. If files are opened multiple times, a new fd is assigned at each open, and closed according to that fd. If a file is removed while instances are still open, processes can still write to them until they close the file themselves or the machine shuts down, at which point it no longer exists.
 
 #### ALGORITHMS
 
@@ -109,5 +156,9 @@
 > B10: What advantages or disadvantages can you see to your design
 > for file descriptors?
 
+  * Our design for file descriptors has very little chance of repeating file descriptors since it just iterates through an array and increments each time. It is also advantageous because it keeps track of the file structs in the array as well, for easy access. However, it is very likely that there is a lot of wasted space in the array, as it does not return to 0 until the entire array (128 bytes) is filled, so it is very likely that once you get about halfway through the array, many of the files near index 0 are closed, so you could save space by putting new files in the first empty spot instead of solely incrementing each time.
+
 > B11: The default tid_t to pid_t mapping is the identity mapping.
 > If you changed it, what advantages are there to your approach?
+
+  * We kept identity mapping for tid_t to pid_t. An advantage to creating a more complex mapping could be having more information about processes and threads and their relationship, based on the relationship between the pid and tid.
