@@ -97,9 +97,16 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
+//=========================================================================
+//  sema_up(&thread_current()->load_done_sema);
+//=========================================================================
+
   /* If load failed, quit. */
   if (!success) {
     palloc_free_page(file_name);
+    //=========================================================================
+  //  thread_current()->load_success = false;
+  //=========================================================================
     thread_exit ();
   }
 

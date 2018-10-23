@@ -221,6 +221,14 @@ pid_t exec (const char *cmd_line)
   struct child* new_child;
 
   pid_t p = process_execute(cmd_line);
+  struct thread* new_thread = get_thread(p);
+  //=========================================================================
+//  sema_down(&new_thread->load_done_sema);
+//=========================================================================
+
+//=========================================================================
+  //if (p != TID_ERROR && &new_thread->load_success){
+//=========================================================================
   if (p != TID_ERROR){
     new_process = palloc_get_page (0);
     new_child = palloc_get_page (0);
