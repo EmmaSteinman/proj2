@@ -4,10 +4,11 @@
 #include <stdio.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
+#include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "../filesys/file.h"
-#include "../filesys/filesys.h"
+#include "filesys/file.h"
+#include "filesys/filesys.h"
 #include "process.h"
 #include "devices/input.h"
 
@@ -123,9 +124,11 @@ syscall_handler (struct intr_frame *f)
 
     case SYS_EXEC:
     {
-      char *cmd_line = sc_get_arg(1, esp);
+      char **cmd_line_addr = sc_get_arg(1, esp);
+      char *cmd_line = get_vaddr(*cmd_line_addr);
 
-      exec(cmd_line);
+      retval = exec(cmd_line);
+      has_retval = true;
       break;
     }
     case SYS_WAIT:
@@ -224,42 +227,44 @@ pid_t exec (const char *cmd_line)
     list_init(&new_process->child_list);
     new_process-> pid = p;
     new_child-> pid = p;
-    new_child->parent_pid = &current->tid;
-    new_child->exit_status = NULL;
+    new_child->parent_pid = current->tid;
+    new_child->exit_status = -1;
     sema_init(&new_child->child_sema, 0);
     process_add_child(new_child);
     process_add(new_process);
+
+    return p;
   }
-  return p;
+  return -1;
 }
 
 
 int wait(pid_t pid)
 {
+  if (pid == -1){
+    return -1;
+  }
+
+  struct thread *child_thread = get_thread(pid);
+  if (child_thread == NULL) {
+    exit(-1);
+  }
+
   struct thread *t = thread_current();
   struct process *parent = get_process(t->tid);
-  struct list child_list = parent->child_list;
-  struct child *c = NULL;
-  struct list_elem *e;
   int exit_status;
 
-  for (e = list_begin (&child_list); e != list_end (&child_list);
-       e = list_next (e))
-    {
-      struct child *current = list_entry (e, struct child, childelem);
-      if (current->pid == pid){
-        c = current;
-        list_remove(e);
-        break;
-      }
-    }
-  if (c == NULL) //not working - wait-bad-ptr does not exit
-    exit(-1);
+  struct list_elem *child_elem = get_child_process(parent->pid, pid);
+  if (child_elem == NULL)
+    return -1;
+  struct child *child_proc = list_entry(child_elem, struct child, childelem);
 
-  sema_down(&c->child_sema); //where should we call sema_up?
+  sema_down(&child_proc->child_sema);
 
-  exit_status = c->exit_status;
-  palloc_free_page(c);
+  exit_status = child_proc->exit_status;
+
+  list_remove(child_elem);
+  palloc_free_page(child_proc);
 
   return exit_status;
 }
