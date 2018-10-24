@@ -256,7 +256,10 @@ int wait(pid_t pid)
   struct process *parent = get_process(t->tid);
   int exit_status;
 
+  // printf("awef\n");
+
   struct list_elem *child_elem = get_child_process(parent->pid, pid);
+  // printf("once\n");
   if (child_elem == NULL) {
     return -1;
   }
@@ -282,8 +285,6 @@ int write(int fd, const void *buffer, unsigned size)
     exit(-1);
   }
   if (fd == 1) {
-    //printf("buffer: %p\n", buffer);
-    //hex_dump(buffer-100, buffer-100, 1000, 1);
     putbuf(buffer, size);
     return size;
   }

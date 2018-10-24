@@ -98,6 +98,7 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+  thread_current()->file = filesys_open(file_name);
 
   pid_t pid = thread_current()->tid;
   struct process *current_proc = get_process(pid);
@@ -510,6 +511,8 @@ setup_stack (void **esp)
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
         *esp = PHYS_BASE;
+    //printf("buffer: %p\n", buffer);
+    //hex_dump(buffer-100, buffer-100, 1000, 1);
       else
         palloc_free_page (kpage);
     }
@@ -626,10 +629,10 @@ struct list_elem*
 get_child_process(pid_t parent_pid, pid_t child_pid)
 {
   struct process *parent = get_process(parent_pid);
-  struct list child_list = parent->child_list;
+  struct list *child_list = &parent->child_list;
   struct list_elem *e;
 
-  for (e = list_begin (&child_list); e != list_end (&child_list);
+  for (e = list_begin (child_list); e != list_end (child_list);
        e = list_next (e))
     {
       struct child *current = list_entry (e, struct child, childelem);
