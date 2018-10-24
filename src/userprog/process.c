@@ -51,21 +51,23 @@ process_execute (const char *file_name)
   char *save_ptr;
   char *fn = strtok_r(full_fn, " ", &save_ptr);
 
+  /* Enter new process in process list */
+  struct process *new_process = palloc_get_page(0);
+  if (new_process != NULL) {
+    new_process->parent_pid = thread_current()->tid;
+    list_init(&new_process->child_list);
+    sema_init(&new_process->load_done_sema, 0);
+    process_add(new_process);
+  }
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (fn, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
+  if (tid == TID_ERROR) {
     palloc_free_page (fn_copy);
-
-  /* Enter new process in process list */
-  if (tid != TID_ERROR) {
-    struct process *new_process = palloc_get_page(0);
-    if (new_process != NULL) {
-      new_process->pid = tid;
-      new_process->parent_pid = thread_current()->tid;
-      list_init(&new_process->child_list);
-      process_add(new_process);
-    }
+    process_remove(new_process);
+    palloc_free_page(new_process);
   }
+  new_process->pid = tid;
 
   return tid;
 }
@@ -99,8 +101,7 @@ start_process (void *file_name_)
 
   pid_t pid = thread_current()->tid;
   struct process *current_proc = get_process(pid);
-  printf("pid = %p\n", current_proc);
-  //sema_up(&current_proc->load_done_sema);
+  sema_up(&current_proc->load_done_sema);
 
   /* If load failed, quit. */
   if (!success) {
@@ -603,6 +604,12 @@ void
 process_add(struct process* proc)
 {
   list_push_back(&process_list, &proc->procelem);
+}
+
+void
+process_remove(struct process* proc)
+{
+  list_remove(&proc->procelem);
 }
 
 void

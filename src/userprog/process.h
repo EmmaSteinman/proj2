@@ -30,5 +30,6 @@ void process_activate (void);
 struct process* get_process(pid_t p);
 struct list_elem* get_child_process(pid_t parent_pid, pid_t child_pid);
 void process_add(struct process* proc);
+void process_remove(struct process* proc);
 void process_add_child(struct child* ch);
 #endif /* userprog/process.h */

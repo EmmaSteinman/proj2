@@ -217,33 +217,27 @@ pid_t exec (const char *cmd_line)
     exit(-1);
 
   struct thread* current = thread_current();
-  struct process* new_process = palloc_get_page(0);
   struct child* new_child = palloc_get_page(0);
 
-  list_init(&new_process->child_list);
   new_child->parent_pid = current->tid;
   new_child->exit_status = -1;
   sema_init(&new_child->child_sema, 0);
-  sema_init(&new_process->load_done_sema, 0);
-
   process_add_child(new_child);
-  process_add(new_process);
 
   pid_t p = process_execute(cmd_line);
   if (p == TID_ERROR) {
     return -1;
   }
 
-  new_process->pid = p;
-  new_child->pid = p;
 
-  printf("pid = %p\n", new_process);
+  new_child->pid = p;
+  struct process *new_process = get_process(p);
   sema_down(&new_process->load_done_sema);
+
   if (new_process->load_success) {
     return p;
   }
 
-  printf("exec() finishes\n");
 
   return -1;
 }
