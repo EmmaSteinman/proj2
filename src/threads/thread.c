@@ -466,10 +466,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
   t->current_fd = 2;
   t->exit_status = -1;
-  t->load_success = false;
 
   sema_init(&t->thread_dying_sema, 0);
-  sema_init(&t->load_done_sema, 0);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

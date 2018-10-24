@@ -107,8 +107,6 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
     struct semaphore thread_dying_sema;
     int exit_status;
-    struct semaphore load_done_sema;
-    bool load_success;
   };
 
 /* If false (default), use round-robin scheduler.

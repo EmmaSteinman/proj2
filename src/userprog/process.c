@@ -97,22 +97,23 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
-//=========================================================================
-//  sema_up(&thread_current()->load_done_sema);
-//=========================================================================
+  pid_t pid = thread_current()->tid;
+  struct process *current_proc = get_process(pid);
+  printf("pid = %p\n", current_proc);
+  //sema_up(&current_proc->load_done_sema);
 
   /* If load failed, quit. */
   if (!success) {
     palloc_free_page(file_name);
-    //=========================================================================
-  //  thread_current()->load_success = false;
-  //=========================================================================
+    // current_proc->load_success = false;
     thread_exit ();
   }
 
   /* Put arguments on the stack */
   setup_arguments(args_count, args, &if_.esp);
   palloc_free_page(file_name);
+
+  // current_proc->load_success = true;
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
