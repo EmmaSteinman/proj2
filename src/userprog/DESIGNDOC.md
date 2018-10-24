@@ -40,7 +40,7 @@
 > you arrange for the elements of argv[] to be in the right order?
 > How do you avoid overflowing the stack page?
 
-  * First we get parse the arguments from the parameter into an array. We pass this into our function which then sets up the stack. It pushes each argument onto the stack in the order in which it is in the array. Then we add null bits to ensure word alignment. We then iterate through the argument array once more but pushing the address of the argument instead of the argument itself. Since we are putting pointers to the arguments, the order of the arguments themselves are not important, as long as the addresses and arguments are in the same order. 
+  * First we get parse the arguments from the parameter into an array. We pass this into our function which then sets up the stack. It pushes each argument onto the stack in the order in which it is in the array. Then we add null bits to ensure word alignment. We then iterate through the argument array once more but pushing the address of the argument instead of the argument itself. Since we are putting pointers to the arguments, the order of the arguments themselves are not important, as long as the addresses and arguments are in the same order.
 
 #### RATIONALE/JUSTIFICATION
 
@@ -120,6 +120,8 @@ struct child {
 > B5: Briefly describe your implementation of the "wait" system call
 > and how it interacts with process termination.
 
+  * After checking for valid pid and child pid, wait calls sema_down on the child struct's semaphore, which will wait until the child calls sema_up upon completion in process_exit. It then gets the exit status before freeing its resources and returning the exit value. Its interaction with process termination is almost solely through the semaphore, which should only have a non-zero value after the process is exited.
+
 > B6: Any access to user program memory at a user-specified address
 > can fail due to a bad pointer value.  Such accesses must cause the
 > process to be terminated.  System calls are fraught with such
@@ -141,6 +143,8 @@ struct child {
 > loading.  How does your code ensure this?  How is the load
 > success/failure status passed back to the thread that calls "exec"?
 
+  * The process struct has a load_done_sema semaphore that only has a non-zero value when the executable associated with that process is completely loaded. The struct also has a load_success bool that tells whether the load was successful or not. After calling process_execute for the new file, exec calls sema_down on the new process' load_done_sema, which will wait until the load is finished. Exec will only continue if load_success is true, and will return -1 otherwise.
+
 > B8: Consider parent process P with child process C.  How do you
 > ensure proper synchronization and avoid race conditions when P
 > calls wait(C) before C exits?  After C exits?  How do you ensure
@@ -148,10 +152,16 @@ struct child {
 > terminates without waiting, before C exits?  After C exits?  Are
 > there any special cases?
 
+  * If P calls wait(C) before C exists, it will return -1 because there will not be a valid process struct for C.
+  * After C exists, C's semaphore will handle race conditions because P will wait until C's semaphore has a positive value which will only happen upon calling process_exit.
+  * FREEING RESOURCES???????????
+
 #### RATIONALE
 
 > B9: Why did you choose to implement access to user memory from the
 > kernel in the way that you did?
+
+  *
 
 > B10: What advantages or disadvantages can you see to your design
 > for file descriptors?
