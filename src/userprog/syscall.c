@@ -238,34 +238,34 @@ pid_t exec (const char *cmd_line)
     return p;
   }
 
-
   return -1;
 }
 
 
 int wait(pid_t pid)
 {
+
+  //printf("pid = %d\n", pid);
   if (pid == -1){
+    //printf("TEST\n");
     return -1;
   }
-
-  struct thread *child_thread = get_thread(pid);
-  if (child_thread == NULL) {
-    exit(-1);
-  }
+  //printf("TEST 2 \n");
 
   struct thread *t = thread_current();
   struct process *parent = get_process(t->tid);
   int exit_status;
 
   struct list_elem *child_elem = get_child_process(parent->pid, pid);
-  if (child_elem == NULL)
+  if (child_elem == NULL) {
     return -1;
+  }
   struct child *child_proc = list_entry(child_elem, struct child, childelem);
 
   sema_down(&child_proc->child_sema);
 
   exit_status = child_proc->exit_status;
+  //printf("exit_status = %d\n", exit_status);
 
   list_remove(child_elem);
   palloc_free_page(child_proc);

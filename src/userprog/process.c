@@ -101,12 +101,12 @@ start_process (void *file_name_)
 
   pid_t pid = thread_current()->tid;
   struct process *current_proc = get_process(pid);
-  sema_up(&current_proc->load_done_sema);
 
   /* If load failed, quit. */
   if (!success) {
     palloc_free_page(file_name);
-    // current_proc->load_success = false;
+    current_proc->load_success = false;
+    sema_up(&current_proc->load_done_sema);
     thread_exit ();
   }
 
@@ -114,7 +114,8 @@ start_process (void *file_name_)
   setup_arguments(args_count, args, &if_.esp);
   palloc_free_page(file_name);
 
-  // current_proc->load_success = true;
+  current_proc->load_success = true;
+  sema_up(&current_proc->load_done_sema);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -168,7 +169,6 @@ process_exit (void)
     }
 
   printf("%s: exit(%d)\n", cur->name, cur->exit_status);
-  sema_up(&cur->thread_dying_sema);
 
   struct process* current_proc = get_process(cur->tid);
   struct process* parent_proc = get_process(current_proc->parent_pid);
@@ -177,9 +177,12 @@ process_exit (void)
 
     if (child != NULL) {
       struct child *child_proc = list_entry (child, struct child, childelem);
+      child_proc->exit_status = cur->exit_status;
       sema_up(&child_proc->child_sema);
     }
   }
+
+  sema_up(&cur->thread_dying_sema);
 }
 
 /* Sets up the CPU for running user code in the current
