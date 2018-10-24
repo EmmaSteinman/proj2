@@ -46,9 +46,13 @@
 
 > A3: Why does Pintos implement strtok_r() but not strtok()?
 
+  * `strtok_r()` takes an extra parameter that allows you to save your position in the string, allowing it to be called on the same string by two threads or processes.
+
 > A4: In Pintos, the kernel separates commands into a executable name
 > and arguments.  In Unix-like systems, the shell does this
 > separation.  Identify at least two advantages of the Unix approach.
+
+  * One advantage to the Unix approach is there is less 
 
 ### SYSTEM CALLS
 
@@ -110,8 +114,8 @@ struct child {
 > B3: Describe your code for reading and writing user data from the
 > kernel.
 
- * Syscall read checks for a file descriptor and either reads from the command line or gets the file and calls file_read which will fill the buffer and return the number of bytes read. Similarly, syscall write checks for a file descriptor and either writes to stdout or gets the file and calls file_write which writes to the buffer and returns the number of bytes written. To take care of synchronization when start_process() opens a file, we call file_deny_write() which will not allow any other processes to write to the file until file_allow_write() is called in process_exit(). This will make sure that there is no data race on reading and writing to files simultaneously. 
- 
+ * Syscall read checks for a file descriptor and either reads from the command line or gets the file and calls file_read which will fill the buffer and return the number of bytes read. Similarly, syscall write checks for a file descriptor and either writes to stdout or gets the file and calls file_write which writes to the buffer and returns the number of bytes written. To take care of synchronization when start_process() opens a file, we call file_deny_write() which will not allow any other processes to write to the file until file_allow_write() is called in process_exit(). This will make sure that there is no data race on reading and writing to files simultaneously.
+
 > B4: Suppose a system call causes a full page (4,096 bytes) of data
 > to be copied from user space into the kernel.  What is the least
 > and the greatest possible number of inspections of the page table
@@ -138,7 +142,7 @@ struct child {
 > paragraphs, describe the strategy or strategies you adopted for
 > managing these issues.  Give an example.
 
- * In our syscall handler, we use a helper function `sc_get_args` to get the arguments from the stack and check their validity with `get_vaddr` as well. Having a separate function handle this avoids clouding the primary function of the code with error handling. 
+ * In our syscall handler, we use a helper function `sc_get_args` to get the arguments from the stack and check their validity with `get_vaddr` as well. Having a separate function handle this avoids clouding the primary function of the code with error handling.
 
 #### SYNCHRONIZATION
 
@@ -165,7 +169,7 @@ struct child {
 > B9: Why did you choose to implement access to user memory from the
 > kernel in the way that you did?
 
-  * We chose to use the method of verifying the validity of the pointer provided by the user and then dereferencing it using `get_vaddr` from `userprog/pagedir.c`. Since this was recommended as the simplest way to implement user memory access, we thought it would be the most efficient and safest way to deal with accessing the memory. Since this method uses outside functions, it will also increase the readability of our code. 
+  * We chose to use the method of verifying the validity of the pointer provided by the user and then dereferencing it using `get_vaddr` from `userprog/pagedir.c`. Since this was recommended as the simplest way to implement user memory access, we thought it would be the most efficient and safest way to deal with accessing the memory. Since this method uses outside functions, it will also increase the readability of our code.
 
 > B10: What advantages or disadvantages can you see to your design
 > for file descriptors?
