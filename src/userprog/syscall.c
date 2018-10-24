@@ -2,6 +2,7 @@
 #include "userprog/syscall.h"
 #include "userprog/pagedir.h"
 #include <stdio.h>
+#include <string.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
@@ -17,6 +18,7 @@
 static void syscall_handler (struct intr_frame *);
 static void *get_vaddr(void *uaddr);
 static void *sc_get_arg(int pos, void *esp);
+static void *sc_get_char_arg(int pos, void *esp);
 
 void halt(void);
 void exit(int status);
@@ -50,11 +52,24 @@ static void *sc_get_arg(int pos, void *esp)
   void *arg = esp + sizeof(void *) * pos;
   void *vaddr_arg = get_vaddr(arg);
 
-  if (vaddr_arg == NULL) {
+  if (vaddr_arg == NULL || get_vaddr(arg + 3) == NULL) {
     exit(-1);
   }
 
   return vaddr_arg;
+}
+
+static void *sc_get_char_arg(int pos, void *esp)
+{
+  void **str_addr = sc_get_arg(pos, esp);
+  void *str = get_vaddr(*str_addr);
+  char *test_str = get_vaddr(*str_addr);
+
+  if (str == NULL || get_vaddr(*str_addr + strlen(test_str)) == NULL) {
+    exit(-1);
+  }
+
+  return  str;
 }
 
 void
@@ -90,10 +105,10 @@ syscall_handler (struct intr_frame *f)
     case SYS_WRITE:
     {
       int fd = *((int *) sc_get_arg(1, esp));
-      void **buffer = sc_get_arg(2, esp);;
+      void *buffer = sc_get_char_arg(2, esp);
       int size = *((int *) sc_get_arg(3, esp));
 
-      retval = write(fd, get_vaddr(*buffer), size);
+      retval = write(fd, buffer, size);
       has_retval = true;
 
       break;
@@ -104,8 +119,7 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_OPEN:
     {
-      char **filename_addr_ptr = sc_get_arg(1, esp);
-      char *filename = get_vaddr(*filename_addr_ptr);
+      char *filename = sc_get_char_arg(1, esp);
 
       retval = open(filename);
       has_retval = true;
@@ -113,8 +127,7 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_CREATE:
     {
-      char **file_addr = sc_get_arg(1, esp);
-      char *file = get_vaddr(*file_addr);
+      char *file = sc_get_char_arg(1, esp);
       int initial_size = *((int *) sc_get_arg(2, esp));
 
       retval_bool = create(file, initial_size);
@@ -124,8 +137,7 @@ syscall_handler (struct intr_frame *f)
 
     case SYS_EXEC:
     {
-      char **cmd_line_addr = sc_get_arg(1, esp);
-      char *cmd_line = get_vaddr(*cmd_line_addr);
+      char *cmd_line = sc_get_char_arg(1, esp);
 
       retval = exec(cmd_line);
       has_retval = true;
@@ -141,8 +153,7 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_REMOVE:
     {
-      char **filename_addr_ptr = sc_get_arg(1, esp);
-      char *filename = get_vaddr(*filename_addr_ptr);
+      char *filename = sc_get_char_arg(1, esp);
 
       retval_bool = remove(filename);
       has_retval_bool = true;
@@ -151,10 +162,10 @@ syscall_handler (struct intr_frame *f)
     case SYS_READ:
     {
       int fd = *((int *) sc_get_arg(1, esp));
-      void **buffer = sc_get_arg(2, esp);;
+      void *buffer = sc_get_char_arg(2, esp);
       int size = *((int *) sc_get_arg(3, esp));
 
-      retval = read(fd, get_vaddr(*buffer), size);
+      retval = read(fd, buffer, size);
       has_retval = true;
       break;
     }
@@ -226,6 +237,7 @@ pid_t exec (const char *cmd_line)
 
   pid_t p = process_execute(cmd_line);
   if (p == TID_ERROR) {
+    palloc_free_page(new_child);
     return -1;
   }
 
@@ -244,22 +256,15 @@ pid_t exec (const char *cmd_line)
 
 int wait(pid_t pid)
 {
-
-  //printf("pid = %d\n", pid);
   if (pid == -1){
-    //printf("TEST\n");
     return -1;
   }
-  //printf("TEST 2 \n");
 
   struct thread *t = thread_current();
   struct process *parent = get_process(t->tid);
   int exit_status;
 
-  // printf("awef\n");
-
   struct list_elem *child_elem = get_child_process(parent->pid, pid);
-  // printf("once\n");
   if (child_elem == NULL) {
     return -1;
   }
@@ -268,7 +273,6 @@ int wait(pid_t pid)
   sema_down(&child_proc->child_sema);
 
   exit_status = child_proc->exit_status;
-  //printf("exit_status = %d\n", exit_status);
 
   list_remove(child_elem);
   palloc_free_page(child_proc);

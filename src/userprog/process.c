@@ -98,7 +98,7 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
-  thread_current()->file = filesys_open(file_name);
+  //thread_current()->file = filesys_open(file_name);
 
   pid_t pid = thread_current()->tid;
   struct process *current_proc = get_process(pid);
