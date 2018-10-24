@@ -173,6 +173,8 @@ process_exit (void)
 
   printf("%s: exit(%d)\n", cur->name, cur->exit_status);
 
+  /* Let the parent know that the child's exiting and update its exit status,
+     if the process has a parent process */
   struct process* current_proc = get_process(cur->tid);
   struct process* parent_proc = get_process(current_proc->parent_pid);
   if (parent_proc != NULL) {
@@ -184,9 +186,21 @@ process_exit (void)
       sema_up(&child_proc->child_sema);
     }
   }
-  if(cur->file != NULL)
-    file_allow_write(cur->file);
 
+  /* Close the thread's opened files */
+  for (int i = 0; i < SCHAR_MAX; i++) {
+    if (cur->fd_array != NULL) {
+      file_close(cur->fd_array[i]);
+    }
+  }
+
+  /* Close the executable, allow it to be modified */
+  if(cur->file != NULL) {
+    file_allow_write(cur->file);
+    file_close(cur->file);
+  }
+
+  /* Let process_wait() knows the thread is exiting */
   sema_up(&cur->thread_dying_sema);
 }
 
