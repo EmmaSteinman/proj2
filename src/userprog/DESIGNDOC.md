@@ -152,7 +152,7 @@ struct child {
  arguments from the stack and check their validity with `get_vaddr` as well. 
  Having a separate function handle this avoids clouding the primary function 
  of the code with error handling. 
-
+ * For example, if `process_execute()` is called, it will pass the file name and arguments into `start_process()`. `start_process()` then parses the arguments into an array, which is passed into our `setup_arguments()` function. This function takes care of pushing the elements and their respective addresses onto the stack. Then, if this process makes a system call, it will use these arguments. Our syscall handler uses `get_vaddr()` to get the virtual address of data from user memory, which will be the system call number. We check that the first and last byte are valid (thus the entire address is valid) before continuing, which will prevent errors when trying to make the system call. Then in the switch statement the correct system call is found and `sc_get_arg()` gets the ith argument from the stack. `sc_get_arg()` checks that the entire 4 bytes are valid before returning, which avoids clouding the syscall handler with error handling. If the syscall is getting a character argument, `sc_get_char_arg()` makes sure to check that the contents of the address are valid as well, not just the address. For example suppose the system call is read. After getting the arguments, it will call `read()` and immediately check if the buffer is null. This will prevent trying to access null data, preventing more errors down the road. 
 #### SYNCHRONIZATION
 
 > B7: The "exec" system call returns -1 if loading the new executable
