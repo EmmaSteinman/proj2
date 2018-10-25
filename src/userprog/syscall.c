@@ -233,6 +233,7 @@ pid_t exec (const char *cmd_line)
   new_child->parent_pid = current->tid;
   new_child->exit_status = -1;
   sema_init(&new_child->child_sema, 0);
+  sema_init(&new_child->load_done_sema, 0);
   process_add_child(new_child);
 
   pid_t p = process_execute(cmd_line);
@@ -241,12 +242,10 @@ pid_t exec (const char *cmd_line)
     return -1;
   }
 
-
   new_child->pid = p;
-  struct process *new_process = get_process(p);
-  sema_down(&new_process->load_done_sema);
+  sema_down(&new_child->load_done_sema);
 
-  if (new_process->load_success) {
+  if (new_child->load_success) {
     return p;
   }
 

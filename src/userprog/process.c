@@ -56,7 +56,6 @@ process_execute (const char *file_name)
   if (new_process != NULL) {
     new_process->parent_pid = thread_current()->tid;
     list_init(&new_process->child_list);
-    sema_init(&new_process->load_done_sema, 0);
     process_add(new_process);
   }
 
@@ -101,12 +100,18 @@ start_process (void *file_name_)
 
   pid_t pid = thread_current()->tid;
   struct process *current_proc = get_process(pid);
+  struct list_elem *child_elem = get_child_process(current_proc->parent_pid, pid);
+  struct child *child_proc = NULL;
+  if (child_elem != NULL)
+    child_proc = list_entry(child_elem, struct child, childelem);
 
   /* If load failed, quit. */
   if (!success) {
     palloc_free_page(file_name);
-    current_proc->load_success = false;
-    sema_up(&current_proc->load_done_sema);
+    if (child_proc != NULL) {
+      child_proc->load_success = false;
+      sema_up(&child_proc->load_done_sema);
+    }
     thread_exit ();
   }
 
@@ -117,8 +122,10 @@ start_process (void *file_name_)
   setup_arguments(args_count, args, &if_.esp);
   palloc_free_page(file_name);
 
-  current_proc->load_success = true;
-  sema_up(&current_proc->load_done_sema);
+  if (child_proc != NULL) {
+    child_proc->load_success = true;
+    sema_up(&child_proc->load_done_sema);
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -171,7 +178,6 @@ process_exit (void)
       pagedir_destroy (pd);
     }
 
-  printf("%s: exit(%d)\n", cur->name, cur->exit_status);
 
   /* Let the parent know that the child's exiting and update its exit status,
      if the process has a parent process */
@@ -186,6 +192,18 @@ process_exit (void)
       sema_up(&child_proc->child_sema);
     }
   }
+
+  /*  */
+  struct list *child_list = &current_proc->child_list;
+
+  while (!list_empty(child_list)) {
+    struct list_elem *e = list_pop_front(child_list);
+    struct child *current = list_entry (e, struct child, childelem);
+    palloc_free_page(current);
+  }
+
+  list_remove(&current_proc->procelem);
+  palloc_free_page(current_proc);
 
   /* Close the thread's opened files */
   for (int i = 0; i < SCHAR_MAX; i++) {
@@ -202,6 +220,7 @@ process_exit (void)
 
   /* Let process_wait() knows the thread is exiting */
   sema_up(&cur->thread_dying_sema);
+  printf("%s: exit(%d)\n", cur->name, cur->exit_status);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -649,6 +668,10 @@ get_child_process(pid_t parent_pid, pid_t child_pid)
   struct process *parent = get_process(parent_pid);
   struct list *child_list = &parent->child_list;
   struct list_elem *e;
+
+  if (parent == NULL) {
+    return NULL;
+  }
 
   for (e = list_begin (child_list); e != list_end (child_list);
        e = list_next (e))

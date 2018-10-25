@@ -9,8 +9,6 @@ struct process {
   pid_t parent_pid;
   struct list child_list;
   struct list_elem procelem;
-  struct semaphore load_done_sema;
-  bool load_success;
 };
 
 struct child {
@@ -19,6 +17,8 @@ struct child {
   int exit_status;
   struct semaphore child_sema;
   struct list_elem childelem;
+  struct semaphore load_done_sema;
+  bool load_success;
 };
 
 struct list process_list;
