@@ -238,6 +238,7 @@ pid_t exec (const char *cmd_line)
 
   pid_t p = process_execute(cmd_line);
   if (p == TID_ERROR) {
+    list_remove(&new_child->childelem);
     palloc_free_page(new_child);
     return -1;
   }
@@ -248,6 +249,9 @@ pid_t exec (const char *cmd_line)
   if (new_child->load_success) {
     return p;
   }
+
+  list_remove(&new_child->childelem);
+  palloc_free_page(new_child);
 
   return -1;
 }
