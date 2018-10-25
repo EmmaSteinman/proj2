@@ -32,7 +32,7 @@
 > `struct` member, `global` or `static` variable, `typedef`, or
 > enumeration.  Document the purpose of each in 25 words or less.
 
-
+  * We did not declare any new variables or structs.
 
 #### ALGORITHMS
 
@@ -52,7 +52,8 @@
 > and arguments.  In Unix-like systems, the shell does this
 > separation.  Identify at least two advantages of the Unix approach.
 
-  * One advantage to the Unix approach is there is less 
+  * One advantage to the Unix approach is that the shell is part of user mode, which is not privileged. Thus, there is a smaller chance the executable or arguments could overwrite something important or access invalid memory. Since it is not privileged, in the case an invalid argument is passed in, the shell will catch it before going into the kernel, eliminating some error handling in the kernel.
+  * Another advantage is that it creates an abstraction for the user, allowing them to make system calls and access the file system without explicitly knowing the code or how it is working.  
 
 ### SYSTEM CALLS
 
@@ -88,7 +89,7 @@ struct child {
 * New `struct list process_list`
   * A list of all processes, where each element is a pointer to a process struct, allowing us to keep track of all processes and their children
 
-* Changes to `struct thread`
+* Changes to `struct thread
   * `struct file *fd_array[SCHAR_MAX];`
     * An array to hold file descriptors to ensure uniqueness
   * `int current_fd;`
@@ -123,6 +124,8 @@ struct child {
 > for a system call that only copies 2 bytes of data?  Is there room
 > for improvement in these numbers, and how much?
 
+  * If the data is copied in one page then there will only be one call to pagedir_get_page() necessary. In the worst case, if all 4096 bytes are copied into separate pages, then there could by 4096 calls necessary. For a system call that only copies 2 bytes of data, they could either be copied to the same page or separate pages, so either one or two calls are necessary. The maximum number of calls necessary could be reduced if the kernel makes sure to fill one page before allocating a new page. This will minimize the number of bytes that are copied onto separate pages. This could decrease the maximum to two system calls. If the data is copied at the beginning of a page then it will all be copied onto one page. Alternatively, if the page already has some data on it before the system call begins to copy new data, then it will take up two pages; the rest of the first page and part of a new page. 
+
 > B5: Briefly describe your implementation of the "wait" system call
 > and how it interacts with process termination.
 
@@ -142,7 +145,10 @@ struct child {
 > paragraphs, describe the strategy or strategies you adopted for
 > managing these issues.  Give an example.
 
- * In our syscall handler, we use a helper function `sc_get_args` to get the arguments from the stack and check their validity with `get_vaddr` as well. Having a separate function handle this avoids clouding the primary function of the code with error handling.
+ * In our syscall handler, we use a helper function `sc_get_args` to get the 
+ arguments from the stack and check their validity with `get_vaddr` as well. 
+ Having a separate function handle this avoids clouding the primary function 
+ of the code with error handling. 
 
 #### SYNCHRONIZATION
 
@@ -162,7 +168,10 @@ struct child {
 
   * If P calls wait(C) before C exists, it will return -1 because there will not be a valid process struct for C.
   * After C exists, C's semaphore will handle race conditions because P will wait until C's semaphore has a positive value which will only happen upon calling process_exit.
-  * FREEING RESOURCES???????????
+  * If the child exits first, the parent may still need to access it's exit status so we cannot free it's resources yet. However, if a parent exits first, the child will not need to access it's resources, so we can free them, even if the child still exists. So in either case, the parent will deallocate the process' resources.
+  * If the child process fails to load, exec() will free it's resources.
+  * If the parent calls wait, it will deallocate the child after it exits because the process has terminated and it will not wait for it again.
+  * If the parent never calls wait for a child and terminates, it will go through it's child list and free any resources before finishing.
 
 #### RATIONALE
 
