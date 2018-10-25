@@ -34,7 +34,10 @@ bool remove(const char *file);
 int read(int fd, void *buffer, unsigned size);
 int wait(pid_t pid);
 
-
+//==========================================================
+// get_vaddr
+// getting virtual address from user memory
+//==========================================================
 static void *get_vaddr(void *uaddr)
 {
   if (uaddr == NULL || !is_user_vaddr(uaddr)) {
@@ -47,43 +50,62 @@ static void *get_vaddr(void *uaddr)
   return vaddr;
 }
 
+//==========================================================
+// sc_get_arg
+// gets ith argument from the stack, checking validity 
+//  before returning
+//==========================================================
 static void *sc_get_arg(int pos, void *esp)
 {
   void *arg = esp + sizeof(void *) * pos;
   void *vaddr_arg = get_vaddr(arg);
 
-  if (vaddr_arg == NULL || get_vaddr(arg + 3) == NULL) {
+  if (vaddr_arg == NULL || get_vaddr(arg + 3) == NULL) {            //check if entire 4 bytes are valid
     exit(-1);
   }
 
   return vaddr_arg;
 }
 
+//==========================================================
+// sc_get_char_arg
+// gets ith character argument from stack, checking 
+//  validity of address and contents before returning
+//==========================================================
 static void *sc_get_char_arg(int pos, void *esp)
 {
   void **str_addr = sc_get_arg(pos, esp);
   void *str = get_vaddr(*str_addr);
   char *test_str = get_vaddr(*str_addr);
 
-  if (str == NULL || get_vaddr(*str_addr + strlen(test_str)) == NULL) {
+  if (str == NULL || get_vaddr(*str_addr + strlen(test_str)) == NULL) {         //checking if contents are valid
     exit(-1);
   }
 
   return  str;
 }
 
+//==========================================================
+// syscall_init
+// initializes syscall handler 
+//==========================================================
 void
 syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
+//==========================================================
+// syscall_handler
+// handles system calls, calling appropriate functions 
+//  depending on what values are on the stack
+//==========================================================
 static void
 syscall_handler (struct intr_frame *f)
 {
   void *esp = f->esp;
   void *vaddr_esp = get_vaddr(esp);
-  if (vaddr_esp == NULL || get_vaddr(esp + 3) == NULL) {
+  if (vaddr_esp == NULL || get_vaddr(esp + 3) == NULL) {      //checking validity of all 4 bytes
     exit(-1);
   }
 
@@ -95,7 +117,7 @@ syscall_handler (struct intr_frame *f)
   bool has_retval_bool = false;
 
 
-  switch (syscall_number) {
+  switch (syscall_number) {                           //gets arguments from stack and calls function
     case SYS_EXIT:
     {
       int status = *((int *) sc_get_arg(1, esp));
@@ -211,17 +233,29 @@ syscall_handler (struct intr_frame *f)
   }
 }
 
+//==========================================================
+// halt
+// terminates Pintos
+//==========================================================
 void halt(void)
 {
   shutdown_power_off();
 }
 
+//==========================================================
+// exit
+// terminates current user program
+//==========================================================
 void exit(int status)
 {
   thread_current()->exit_status = status;
   thread_exit();
 }
 
+//==========================================================
+// exec
+// create new process running executable file
+//==========================================================
 pid_t exec (const char *cmd_line)
 {
   if (cmd_line == NULL)
@@ -231,18 +265,18 @@ pid_t exec (const char *cmd_line)
   struct process* parent = get_process(current->tid);
   struct child* new_child = palloc_get_page(0);
 
-  if (new_child == NULL) {
+  if (new_child == NULL) {            //no more memory to allocate
     return -1;
   }
 
-  new_child->parent_pid = current->tid;
+  new_child->parent_pid = current->tid;       //set up new_child struct
   new_child->exit_status = -1;
   sema_init(&new_child->child_sema, 0);
   sema_init(&new_child->load_done_sema, 0);
   process_add_child(new_child);
 
   pid_t p = process_execute(cmd_line);
-  if (p == TID_ERROR) {
+  if (p == TID_ERROR) {                                     //if process failed
     process_remove_child(&parent->child_lock, new_child);
     palloc_free_page(new_child);
     return -1;
@@ -251,16 +285,19 @@ pid_t exec (const char *cmd_line)
   new_child->pid = p;
   sema_down(&new_child->load_done_sema);
 
-  if (new_child->load_success) {
+  if (new_child->load_success) {              //load sucessful
     return p;
   } else {
-    process_remove_child(&parent->child_lock, new_child);
-    palloc_free_page(new_child);
+    process_remove_child(&parent->child_lock, new_child);             //load failed - free resourdes
+    palloc_free_page(new_child);  
     return -1;
   }
 }
 
-
+//==========================================================
+// wait
+// waits for child process and gets its exit status
+//==========================================================
 int wait(pid_t pid)
 {
   if (pid == -1){
@@ -272,21 +309,25 @@ int wait(pid_t pid)
   int exit_status;
 
   struct list_elem *child_elem = get_child_process(parent->pid, pid);
-  if (child_elem == NULL) {
+  if (child_elem == NULL) {                     //not a valid child of parent
     return -1;
   }
   struct child *child_proc = list_entry(child_elem, struct child, childelem);
 
-  sema_down(&child_proc->child_sema);
+  sema_down(&child_proc->child_sema);       //waits for child to exit
 
   exit_status = child_proc->exit_status;
 
-  process_remove_child(&parent->child_lock, child_proc);
+  process_remove_child(&parent->child_lock, child_proc);        //free resources
   palloc_free_page(child_proc);
 
   return exit_status;
 }
 
+//==========================================================
+// write
+// writes to open file
+//==========================================================
 int write(int fd, const void *buffer, unsigned size)
 {
   struct thread *t = thread_current();
@@ -295,7 +336,7 @@ int write(int fd, const void *buffer, unsigned size)
   if (buffer == NULL) {
     exit(-1);
   }
-  if (fd == 1) {
+  if (fd == 1) {                //stdout
     putbuf(buffer, size);
     return size;
   }
@@ -305,13 +346,17 @@ int write(int fd, const void *buffer, unsigned size)
   else{
     file = NULL;
   }
-  if (file == NULL){
+  if (file == NULL){            //invalid file descriptor
     exit(-1);
   }
 
   return file_write(file, buffer, size);
 }
 
+//==========================================================
+// open
+// opens file
+//==========================================================
 int open(const char *file)
 {
   if (file == NULL) {
@@ -319,24 +364,28 @@ int open(const char *file)
   }
 
   struct thread *t = thread_current();
-  int fd = t->current_fd;
+  int fd = t->current_fd;                     //get next available file descriptor
 
   struct file *file_1 = filesys_open(file);
-  if (file_1 == NULL) {
+  if (file_1 == NULL) {                         //open failed
     return -1;
   }
 
   t->fd_array[fd] = file_1;
-  t->current_fd++;
+  t->current_fd++;                          //update file descriptor array 
 
   return fd;
 }
 
+//==========================================================
+// close
+// closes file
+//==========================================================
 void close(int fd){
   struct thread *t = thread_current();
   struct file *file;
   if(fd < t->current_fd){
-     file = t->fd_array[fd];
+     file = t->fd_array[fd];              //update file descriptor array
      t->fd_array[fd] = NULL;
   }
   else{
@@ -345,12 +394,16 @@ void close(int fd){
   file_close(file);
 }
 
+//==========================================================
+// filesize
+// returns size of file
+//==========================================================
 int filesize(int fd)
 {
   struct thread *t = thread_current();
   struct file *file;
 
-  if(fd < t->current_fd){
+  if(fd < t->current_fd){               //finds file in array
      file = t->fd_array[fd];
   }
   else{
@@ -360,11 +413,15 @@ int filesize(int fd)
   return size;
 }
 
+//==========================================================
+// tell
+// returns next byte to be read or written to
+//==========================================================
 unsigned tell(int fd){
   struct thread *t = thread_current();
   struct file *file;
 
-  if(fd < t->current_fd){
+  if(fd < t->current_fd){           //gets file
      file = t->fd_array[fd];
   }
   else{
@@ -375,6 +432,11 @@ unsigned tell(int fd){
   return tell;
 }
 
+//==========================================================
+// seek
+// changes next byte to be written to or read to position
+//  from beginning of file
+//==========================================================
 void seek(int fd, unsigned position){
   struct thread *t = thread_current();
   struct file *file;
@@ -389,6 +451,10 @@ void seek(int fd, unsigned position){
   file_seek(file, position);
 }
 
+//==========================================================
+// create
+// creates a new file
+//==========================================================
 bool create(const char *file, unsigned initial_size){
   if (file == NULL) {
     exit(-1);
@@ -397,6 +463,10 @@ bool create(const char *file, unsigned initial_size){
   return filesys_create(file, initial_size);
 }
 
+//==========================================================
+// read
+// reads from an open file
+//==========================================================
 int read(int fd, void *buffer, unsigned size){
   struct thread *t = thread_current();
   struct file *file;
@@ -406,7 +476,7 @@ int read(int fd, void *buffer, unsigned size){
     exit(-1);
   }
 
-  if (fd == 0){
+  if (fd == 0){                         //stdin
     for(int i  =0;i < (int)size; i++){
       letter[i] = input_getc();
     }
@@ -414,7 +484,7 @@ int read(int fd, void *buffer, unsigned size){
   }
 
   if(fd < t->current_fd){
-     file = t->fd_array[fd];
+     file = t->fd_array[fd];  
   }
   else{
     file = NULL;
@@ -426,6 +496,10 @@ int read(int fd, void *buffer, unsigned size){
   return file_read(file, buffer, size);
 }
 
+//==========================================================
+// remove
+// deletes file
+//==========================================================
 bool remove(const char *file){
   if (file == NULL) {
     exit(-1);
