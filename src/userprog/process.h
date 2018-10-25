@@ -9,6 +9,7 @@ struct process {
   pid_t parent_pid;
   struct list child_list;
   struct list_elem procelem;
+  struct lock child_lock;
 };
 
 struct child {
@@ -22,6 +23,7 @@ struct child {
 };
 
 struct list process_list;
+struct lock process_list_lock;
 
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
@@ -32,4 +34,5 @@ struct list_elem* get_child_process(pid_t parent_pid, pid_t child_pid);
 void process_add(struct process* proc);
 void process_remove(struct process* proc);
 void process_add_child(struct child* ch);
+void process_remove_child(struct lock *child_lock, struct child *child);
 #endif /* userprog/process.h */

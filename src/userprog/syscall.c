@@ -228,7 +228,12 @@ pid_t exec (const char *cmd_line)
     exit(-1);
 
   struct thread* current = thread_current();
+  struct process* parent = get_process(current->tid);
   struct child* new_child = palloc_get_page(0);
+
+  if (new_child == NULL) {
+    return -1;
+  }
 
   new_child->parent_pid = current->tid;
   new_child->exit_status = -1;
@@ -238,7 +243,7 @@ pid_t exec (const char *cmd_line)
 
   pid_t p = process_execute(cmd_line);
   if (p == TID_ERROR) {
-    list_remove(&new_child->childelem);
+    process_remove_child(&parent->child_lock, new_child);
     palloc_free_page(new_child);
     return -1;
   }
@@ -248,12 +253,11 @@ pid_t exec (const char *cmd_line)
 
   if (new_child->load_success) {
     return p;
+  } else {
+    process_remove_child(&parent->child_lock, new_child);
+    palloc_free_page(new_child);
+    return -1;
   }
-
-  list_remove(&new_child->childelem);
-  palloc_free_page(new_child);
-
-  return -1;
 }
 
 
@@ -277,7 +281,7 @@ int wait(pid_t pid)
 
   exit_status = child_proc->exit_status;
 
-  list_remove(child_elem);
+  process_remove_child(&parent->child_lock, child_proc);
   palloc_free_page(child_proc);
 
   return exit_status;

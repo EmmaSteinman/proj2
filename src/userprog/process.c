@@ -45,8 +45,11 @@ process_execute (const char *file_name)
 
   /* Extract the actual file name from FILE_NAME */
   char *full_fn = palloc_get_page(0);
-  if (full_fn == NULL)
+  if (full_fn == NULL) {
+    palloc_free_page(fn_copy);
     return TID_ERROR;
+  }
+
   strlcpy(full_fn, file_name, PGSIZE);
   char *save_ptr;
   char *fn = strtok_r(full_fn, " ", &save_ptr);
@@ -56,17 +59,26 @@ process_execute (const char *file_name)
   if (new_process != NULL) {
     new_process->parent_pid = thread_current()->tid;
     list_init(&new_process->child_list);
+    lock_init(&new_process->child_lock);
     process_add(new_process);
+  } else {
+    palloc_free_page(fn_copy);
+    palloc_free_page(full_fn);
+    return TID_ERROR;
   }
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (fn, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR) {
-    palloc_free_page (fn_copy);
     process_remove(new_process);
     palloc_free_page(new_process);
+    palloc_free_page(full_fn);
+    palloc_free_page(fn_copy);
+    return TID_ERROR;
   }
+
   new_process->pid = tid;
+  palloc_free_page(full_fn);
 
   return tid;
 }
@@ -161,24 +173,6 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
-  /* Destroy the current process's page directory and switch back
-     to the kernel-only page directory. */
-  pd = cur->pagedir;
-  if (pd != NULL)
-    {
-      /* Correct ordering here is crucial.  We must set
-         cur->pagedir to NULL before switching page directories,
-         so that a timer interrupt can't switch back to the
-         process page directory.  We must activate the base page
-         directory before destroying the process's page
-         directory, or our active page directory will be one
-         that's been freed (and cleared). */
-      cur->pagedir = NULL;
-      pagedir_activate (NULL);
-      pagedir_destroy (pd);
-    }
-
-
   /* Let the parent know that the child's exiting and update its exit status,
      if the process has a parent process */
   struct process* current_proc = get_process(cur->tid);
@@ -196,13 +190,15 @@ process_exit (void)
   /*  */
   struct list *child_list = &current_proc->child_list;
 
+  lock_acquire(&current_proc->child_lock);
   while (!list_empty(child_list)) {
     struct list_elem *e = list_pop_front(child_list);
     struct child *current = list_entry (e, struct child, childelem);
     palloc_free_page(current);
   }
+  lock_release(&current_proc->child_lock);
 
-  list_remove(&current_proc->procelem);
+  process_remove(current_proc);
   palloc_free_page(current_proc);
 
   /* Close the thread's opened files */
@@ -220,6 +216,25 @@ process_exit (void)
 
   /* Let process_wait() knows the thread is exiting */
   sema_up(&cur->thread_dying_sema);
+  
+  /* Destroy the current process's page directory and switch back
+     to the kernel-only page directory. */
+  pd = cur->pagedir;
+  if (pd != NULL)
+    {
+      /* Correct ordering here is crucial.  We must set
+         cur->pagedir to NULL before switching page directories,
+         so that a timer interrupt can't switch back to the
+         process page directory.  We must activate the base page
+         directory before destroying the process's page
+         directory, or our active page directory will be one
+         that's been freed (and cleared). */
+      cur->pagedir = NULL;
+      pagedir_activate (NULL);
+      pagedir_destroy (pd);
+    }
+
+  /* Print the exit message */
   printf("%s: exit(%d)\n", cur->name, cur->exit_status);
 }
 
@@ -632,34 +647,52 @@ setup_arguments(int argc, char **args, void **esp)
 struct process*
 get_process(pid_t p)
 {
+  lock_acquire(&process_list_lock);
   struct list_elem *e;
   for (e = list_begin (&process_list); e != list_end (&process_list);
        e = list_next (e))
     {
       struct process *proc = list_entry (e, struct process, procelem);
-      if (proc->pid == p)
+      if (proc->pid == p) {
+        lock_release(&process_list_lock);
         return proc;
+      }
     }
+  lock_release(&process_list_lock);
   return NULL;
 }
 
 void
 process_add(struct process* proc)
 {
+  lock_acquire(&process_list_lock);
   list_push_back(&process_list, &proc->procelem);
+  lock_release(&process_list_lock);
 }
 
 void
 process_remove(struct process* proc)
 {
+  lock_acquire(&process_list_lock);
   list_remove(&proc->procelem);
+  lock_release(&process_list_lock);
 }
 
 void
 process_add_child(struct child* ch)
 {
   struct process* proc = get_process(ch->parent_pid);
+  lock_acquire(&proc->child_lock);
   list_push_back(&proc->child_list, &ch->childelem);
+  lock_release(&proc->child_lock);
+}
+
+void
+process_remove_child(struct lock *child_lock, struct child *child)
+{
+  lock_acquire(child_lock);
+  list_remove(&child->childelem);
+  lock_release(child_lock);
 }
 
 struct list_elem*
@@ -673,14 +706,17 @@ get_child_process(pid_t parent_pid, pid_t child_pid)
     return NULL;
   }
 
+  lock_acquire(&parent->child_lock);
   for (e = list_begin (child_list); e != list_end (child_list);
        e = list_next (e))
     {
       struct child *current = list_entry (e, struct child, childelem);
       if (current->pid == child_pid){
+        lock_release(&parent->child_lock);
         return e;
       }
     }
+  lock_release(&parent->child_lock);
 
   return NULL;
 }
