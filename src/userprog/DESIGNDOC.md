@@ -32,7 +32,7 @@
 > `struct` member, `global` or `static` variable, `typedef`, or
 > enumeration.  Document the purpose of each in 25 words or less.
 
-  * We did not declare any new variables or structs.
+  * We did not declare any new variables or structs for argument passing.
 
 #### ALGORITHMS
 
@@ -40,7 +40,7 @@
 > you arrange for the elements of argv[] to be in the right order?
 > How do you avoid overflowing the stack page?
 
-  * First we get parse the arguments from the parameter into an array. We pass this into our function which then sets up the stack. It pushes each argument onto the stack in the order in which it is in the array. Then we add null bits to ensure word alignment. We then iterate through the argument array once more but pushing the address of the argument instead of the argument itself. Since we are putting pointers to the arguments, the order of the arguments themselves are not important, as long as the addresses and arguments are in the same order.
+  * First we parse the arguments from the parameter into an array. We pass this into our function which then sets up the stack. It pushes each argument onto the stack in the order in which it is in the array. Then we add null bits to ensure word alignment. We then iterate through the argument array once more but pushing the address of the argument instead of the argument itself. Since we are putting pointers to the arguments, the order of the arguments themselves are not important, as long as the addresses and arguments are in the same order.
 
 #### RATIONALE/JUSTIFICATION
 
@@ -104,7 +104,7 @@ struct child {
     * A semaphore to notify when the thread is dying
   * `int exit_status;`
     * Holds thread's exit status
-  
+
 
 
 > B2: Describe how file descriptors are associated with open files.
@@ -127,12 +127,12 @@ struct child {
 > for a system call that only copies 2 bytes of data?  Is there room
 > for improvement in these numbers, and how much?
 
-  * If the data is copied in one page then there will only be one call to `pagedir_get_page()` necessary. In the worst case, if all 4096 bytes are copied into separate pages, then there could by 4096 calls necessary. For a system call that only copies 2 bytes of data, they could either be copied to the same page or separate pages, so either one or two calls are necessary. The maximum number of calls necessary could be reduced if the kernel makes sure to fill one page before allocating a new page. This will minimize the number of bytes that are copied onto separate pages. This could decrease the maximum to two system calls. If the data is copied at the beginning of a page then it will all be copied onto one page. Alternatively, if the page already has some data on it before the system call begins to copy new data, then it will take up two pages; the rest of the first page and part of a new page. 
+  * If the data is copied in one page then there will only be one call to `pagedir_get_page()` necessary. In the worst case, if all 4096 bytes are copied into separate pages, then there could be 4096 calls necessary. For a system call that only copies 2 bytes of data, they could either be copied to the same page or separate pages, so either one or two calls are necessary. The maximum number of calls necessary could be reduced if the kernel makes sure to fill one page before allocating a new page. This will minimize the number of bytes that are copied onto separate pages. This could decrease the maximum to two system calls. If the data is copied at the beginning of a page then it will all be copied onto one page. Alternatively, if the page already has some data on it before the system call begins to copy new data, then it will take up two pages; the rest of the first page and part of a new page.
 
 > B5: Briefly describe your implementation of the "wait" system call
 > and how it interacts with process termination.
 
-  * After checking for valid pid and child pid, wait calls `sema_down()` on the child struct's semaphore, which will wait until the child calls `sema_up()` upon completion in process_exit. It then gets the exit status before freeing its resources and returning the exit value. Its interaction with process termination is almost solely through the semaphore, which should only have a non-zero value after the process is exited.
+  * After checking for valid pid and child pid, wait calls `sema_down()` on the child struct's semaphore, which will wait until the child calls `sema_up()` upon completion in process_exit. It then gets the exit status before freeing its resources and returning the exit value. Its interaction with process termination is almost solely through the semaphore, which should only have a non-zero value after the process has exited.
 
 > B6: Any access to user program memory at a user-specified address
 > can fail due to a bad pointer value.  Such accesses must cause the
@@ -148,9 +148,9 @@ struct child {
 > paragraphs, describe the strategy or strategies you adopted for
 > managing these issues.  Give an example.
 
- * In our syscall handler, we use a helper function `sc_get_args` to get the arguments from the stack and check their validity with `get_vaddr` as well. Having a separate function handle this avoids clouding the primary function of the code with error handling. 
- * For example, if `process_execute()` is called, it will pass the file name and arguments into `start_process()`. `start_process()` then parses the arguments into an array, which is passed into our `setup_arguments()` function. This function takes care of pushing the elements and their respective addresses onto the stack. Then, if this process makes a system call, it will use these arguments. Our syscall handler uses `get_vaddr()` to get the virtual address of data from user memory, which will be the system call number. We check that the first and last byte are valid (thus the entire address is valid) before continuing, which will prevent errors when trying to make the system call. Then in the switch statement the correct system call is found and `sc_get_arg()` gets the ith argument from the stack. `sc_get_arg()` checks that the entire 4 bytes are valid before returning, which avoids clouding the syscall handler with error handling. If the syscall is getting a character argument, `sc_get_char_arg()` makes sure to check that the contents of the address are valid as well, not just the address. For example suppose the system call is read. After getting the arguments, it will call `read()` and immediately check if the buffer is null. This will prevent trying to access null data, preventing more errors down the road. Then using the file descriptor, it gets the file or a null value. If the file is null, that means the file descriptor was invalid and exits with a code of -1. Then if it has passed all of our error handling, it will call and return `file_read()`. The other system calls are handled very similarly, by checking for basic error conditions inside the function but in a simple manner that simply exits or returns a value promptly so that the main portion of the code is clear. 
- 
+ * In our syscall handler, we use a helper function `sc_get_args` to get the arguments from the stack and check their validity with `get_vaddr` as well. Having a separate function handle this avoids clouding the primary function of the code with error handling.
+ * For example, if `process_execute()` is called, it will pass the file name and arguments into `start_process()`. `start_process()` then parses the arguments into an array, which is passed into our `setup_arguments()` function. This function takes care of pushing the elements and their respective addresses onto the stack. Then, if this process makes a system call, it will use these arguments. Our syscall handler uses `get_vaddr()` to get the virtual address of data from user memory, which will be the system call number. We check that the first and last byte are valid (thus the entire address is valid) before continuing, which will prevent errors when trying to make the system call. Then in the switch statement the correct system call is found and `sc_get_arg()` gets the ith argument from the stack. `sc_get_arg()` checks that the entire 4 bytes are valid before returning, which avoids clouding the syscall handler with error handling. If the syscall is getting a character argument, `sc_get_char_arg()` makes sure to check that the contents of the address are valid as well, not just the address. For example suppose the system call is read. After getting the arguments, it will call `read()` and immediately check if the buffer is null. This will prevent trying to access null data, preventing more errors down the road. Then using the file descriptor, it gets the file or a null value. If the file is null, that means the file descriptor was invalid and exits with a code of -1. Then if it has passed all of our error handling, it will call and return `file_read()`. The other system calls are handled very similarly, by checking for basic error conditions inside the function but in a simple manner that simply exits or returns a value promptly so that the main portion of the code is clear.
+
 #### SYNCHRONIZATION
 
 > B7: The "exec" system call returns -1 if loading the new executable
