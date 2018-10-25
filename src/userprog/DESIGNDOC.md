@@ -70,6 +70,7 @@ struct process {
   pid_t parent_pid;
   struct list child_list;
   struct list_elem procelem;
+  struct lock child_lock;
 };
 ```
   * Holds a process' pid, parent's pid, list of all children, allowing us to maintain relationships between parent and child
@@ -82,12 +83,17 @@ struct child {
   int exit_status;
   struct semaphore child_sema;
   struct list_elem childelem;
+  struct semaphore load_done_sema;
+  bool load_success;
 };
 ```
-  * A struct for a child process, holding pid, parent_pid, exit status, and a semaphore, allowing us to check exit status and use appropriate synchronization
+  * A struct for a child process, holding pid, parent_pid, exit status, and two semaphores, allowing us to check exit status and load status and use appropriate synchronization
 
 * New `struct list process_list`
   * A list of all processes, where each element is a pointer to a process struct, allowing us to keep track of all processes and their children
+
+* New `struct lock process_list_lock`
+  * A lock to control data races on the process list
 
 * Changes to `struct thread
   * `struct file *fd_array[SCHAR_MAX];`
@@ -98,10 +104,7 @@ struct child {
     * A semaphore to notify when the thread is dying
   * `int exit_status;`
     * Holds thread's exit status
-  * `struct semaphore load_done_sema;`
-    * Semaphore to ensure exec does not return before load is compmlete
-  * `bool load_success;`
-    * Indicates if load is successful or not, for exec syscall
+  
 
 
 > B2: Describe how file descriptors are associated with open files.
