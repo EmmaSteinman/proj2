@@ -73,7 +73,7 @@ struct process {
   struct lock child_lock;
 };
 ```
-  * Holds a process' pid, parent's pid, list of all children, allowing us to maintain relationships between parent and child
+   * Holds a process' pid, parent's pid, list of all children, allowing us to maintain relationships between parent and child
 
 * New `struct child`
 ```
@@ -87,7 +87,7 @@ struct child {
   bool load_success;
 };
 ```
-  * A struct for a child process, holding pid, parent_pid, exit status, and two semaphores, allowing us to check exit status and load status and use appropriate synchronization
+   * A struct for a child process, holding pid, parent_pid, exit status, and two semaphores, allowing us to check exit status and load status and use appropriate synchronization
 
 * New `struct list process_list`
   * A list of all processes, where each element is a pointer to a process struct, allowing us to keep track of all processes and their children
@@ -127,12 +127,12 @@ struct child {
 > for a system call that only copies 2 bytes of data?  Is there room
 > for improvement in these numbers, and how much?
 
-  * If the data is copied in one page then there will only be one call to pagedir_get_page() necessary. In the worst case, if all 4096 bytes are copied into separate pages, then there could by 4096 calls necessary. For a system call that only copies 2 bytes of data, they could either be copied to the same page or separate pages, so either one or two calls are necessary. The maximum number of calls necessary could be reduced if the kernel makes sure to fill one page before allocating a new page. This will minimize the number of bytes that are copied onto separate pages. This could decrease the maximum to two system calls. If the data is copied at the beginning of a page then it will all be copied onto one page. Alternatively, if the page already has some data on it before the system call begins to copy new data, then it will take up two pages; the rest of the first page and part of a new page. 
+  * If the data is copied in one page then there will only be one call to `pagedir_get_page()` necessary. In the worst case, if all 4096 bytes are copied into separate pages, then there could by 4096 calls necessary. For a system call that only copies 2 bytes of data, they could either be copied to the same page or separate pages, so either one or two calls are necessary. The maximum number of calls necessary could be reduced if the kernel makes sure to fill one page before allocating a new page. This will minimize the number of bytes that are copied onto separate pages. This could decrease the maximum to two system calls. If the data is copied at the beginning of a page then it will all be copied onto one page. Alternatively, if the page already has some data on it before the system call begins to copy new data, then it will take up two pages; the rest of the first page and part of a new page. 
 
 > B5: Briefly describe your implementation of the "wait" system call
 > and how it interacts with process termination.
 
-  * After checking for valid pid and child pid, wait calls sema_down on the child struct's semaphore, which will wait until the child calls sema_up upon completion in process_exit. It then gets the exit status before freeing its resources and returning the exit value. Its interaction with process termination is almost solely through the semaphore, which should only have a non-zero value after the process is exited.
+  * After checking for valid pid and child pid, wait calls `sema_down()` on the child struct's semaphore, which will wait until the child calls `sema_up()` upon completion in process_exit. It then gets the exit status before freeing its resources and returning the exit value. Its interaction with process termination is almost solely through the semaphore, which should only have a non-zero value after the process is exited.
 
 > B6: Any access to user program memory at a user-specified address
 > can fail due to a bad pointer value.  Such accesses must cause the
@@ -148,11 +148,9 @@ struct child {
 > paragraphs, describe the strategy or strategies you adopted for
 > managing these issues.  Give an example.
 
- * In our syscall handler, we use a helper function `sc_get_args` to get the 
- arguments from the stack and check their validity with `get_vaddr` as well. 
- Having a separate function handle this avoids clouding the primary function 
- of the code with error handling. 
- * For example, if `process_execute()` is called, it will pass the file name and arguments into `start_process()`. `start_process()` then parses the arguments into an array, which is passed into our `setup_arguments()` function. This function takes care of pushing the elements and their respective addresses onto the stack. Then, if this process makes a system call, it will use these arguments. Our syscall handler uses `get_vaddr()` to get the virtual address of data from user memory, which will be the system call number. We check that the first and last byte are valid (thus the entire address is valid) before continuing, which will prevent errors when trying to make the system call. Then in the switch statement the correct system call is found and `sc_get_arg()` gets the ith argument from the stack. `sc_get_arg()` checks that the entire 4 bytes are valid before returning, which avoids clouding the syscall handler with error handling. If the syscall is getting a character argument, `sc_get_char_arg()` makes sure to check that the contents of the address are valid as well, not just the address. For example suppose the system call is read. After getting the arguments, it will call `read()` and immediately check if the buffer is null. This will prevent trying to access null data, preventing more errors down the road. 
+ * In our syscall handler, we use a helper function `sc_get_args` to get the arguments from the stack and check their validity with `get_vaddr` as well. Having a separate function handle this avoids clouding the primary function of the code with error handling. 
+ * For example, if `process_execute()` is called, it will pass the file name and arguments into `start_process()`. `start_process()` then parses the arguments into an array, which is passed into our `setup_arguments()` function. This function takes care of pushing the elements and their respective addresses onto the stack. Then, if this process makes a system call, it will use these arguments. Our syscall handler uses `get_vaddr()` to get the virtual address of data from user memory, which will be the system call number. We check that the first and last byte are valid (thus the entire address is valid) before continuing, which will prevent errors when trying to make the system call. Then in the switch statement the correct system call is found and `sc_get_arg()` gets the ith argument from the stack. `sc_get_arg()` checks that the entire 4 bytes are valid before returning, which avoids clouding the syscall handler with error handling. If the syscall is getting a character argument, `sc_get_char_arg()` makes sure to check that the contents of the address are valid as well, not just the address. For example suppose the system call is read. After getting the arguments, it will call `read()` and immediately check if the buffer is null. This will prevent trying to access null data, preventing more errors down the road. Then using the file descriptor, it gets the file or a null value. If the file is null, that means the file descriptor was invalid and exits with a code of -1. Then if it has passed all of our error handling, it will call and return `file_read()`. The other system calls are handled very similarly, by checking for basic error conditions inside the function but in a simple manner that simply exits or returns a value promptly so that the main portion of the code is clear. 
+ 
 #### SYNCHRONIZATION
 
 > B7: The "exec" system call returns -1 if loading the new executable
@@ -160,7 +158,7 @@ struct child {
 > loading.  How does your code ensure this?  How is the load
 > success/failure status passed back to the thread that calls "exec"?
 
-  * The process struct has a load_done_sema semaphore that only has a non-zero value when the executable associated with that process is completely loaded. The struct also has a load_success bool that tells whether the load was successful or not. After calling process_execute for the new file, exec calls sema_down on the new process' load_done_sema, which will wait until the load is finished. Exec will only continue if load_success is true, and will return -1 otherwise.
+  * The process struct has a `load_done_sema` semaphore that only has a non-zero value when the executable associated with that process is completely loaded. The struct also has a `load_success` bool that tells whether the load was successful or not. After calling `process_execute()` for the new file, exec calls `sema_down()` on the new process' `load_done_sema`, which will wait until the load is finished. Exec will only continue if `load_success()` is true, and will return -1 otherwise.
 
 > B8: Consider parent process P with child process C.  How do you
 > ensure proper synchronization and avoid race conditions when P
@@ -169,10 +167,10 @@ struct child {
 > terminates without waiting, before C exits?  After C exits?  Are
 > there any special cases?
 
-  * If P calls wait(C) before C exists, it will return -1 because there will not be a valid process struct for C.
-  * After C exists, C's semaphore will handle race conditions because P will wait until C's semaphore has a positive value which will only happen upon calling process_exit.
+  * If P calls `wait(C)` before C exists, it will return -1 because there will not be a valid process struct for C.
+  * After C exists, C's semaphore will handle race conditions because P will wait until C's semaphore has a positive value which will only happen upon calling `process_exit()`.
   * If the child exits first, the parent may still need to access it's exit status so we cannot free it's resources yet. However, if a parent exits first, the child will not need to access it's resources, so we can free them, even if the child still exists. So in either case, the parent will deallocate the process' resources.
-  * If the child process fails to load, exec() will free it's resources.
+  * If the child process fails to load, `exec()` will free it's resources.
   * If the parent calls wait, it will deallocate the child after it exits because the process has terminated and it will not wait for it again.
   * If the parent never calls wait for a child and terminates, it will go through it's child list and free any resources before finishing.
 
@@ -191,4 +189,4 @@ struct child {
 > B11: The default tid_t to pid_t mapping is the identity mapping.
 > If you changed it, what advantages are there to your approach?
 
-  * We kept identity mapping for tid_t to pid_t. An advantage to creating a more complex mapping could be having more information about processes and threads and their relationship, based on the relationship between the pid and tid.
+  * We kept identity mapping for `tid_t` to `pid_t`. An advantage to creating a more complex mapping could be having more information about processes and threads and their relationship, based on the relationship between the pid and tid.
