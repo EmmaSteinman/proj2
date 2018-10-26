@@ -596,8 +596,10 @@ install_page (void *upage, void *kpage, bool writable)
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
 
-/*
- */
+//==========================================================
+// setup_arguments
+// pushes arguments onto stack with respective addresses
+//==========================================================
 static void
 setup_arguments(int argc, char **args, void **esp)
 {
@@ -649,6 +651,10 @@ setup_arguments(int argc, char **args, void **esp)
   *esp = current_address;
 }
 
+//==========================================================
+// get_process
+// gets process from process list given pid
+//==========================================================
 struct process*
 get_process(pid_t p)
 {
@@ -667,6 +673,10 @@ get_process(pid_t p)
   return NULL;
 }
 
+//==========================================================
+// process_add
+// adds process to process list
+//==========================================================
 void
 process_add(struct process* proc)
 {
@@ -675,6 +685,10 @@ process_add(struct process* proc)
   lock_release(&process_list_lock);
 }
 
+//==========================================================
+// process_remove
+// removes process from process list
+//==========================================================
 void
 process_remove(struct process* proc)
 {
@@ -683,6 +697,10 @@ process_remove(struct process* proc)
   lock_release(&process_list_lock);
 }
 
+//==========================================================
+// process_add_child
+// adds child to parent's child list
+//==========================================================
 void
 process_add_child(struct child* ch)
 {
@@ -692,6 +710,10 @@ process_add_child(struct child* ch)
   lock_release(&proc->child_lock);
 }
 
+//==========================================================
+// process_remove_child
+// removes child from parent's child list
+//==========================================================
 void
 process_remove_child(struct lock *child_lock, struct child *child)
 {
@@ -700,6 +722,10 @@ process_remove_child(struct lock *child_lock, struct child *child)
   lock_release(child_lock);
 }
 
+//==========================================================
+// get_child_process
+// gets a child process from process list
+//==========================================================
 struct list_elem*
 get_child_process(pid_t parent_pid, pid_t child_pid)
 {
