@@ -331,7 +331,11 @@ int write(int fd, const void *buffer, unsigned size)
     exit(-1);
   }
 
-  return file_write(file, buffer, size);
+  lock_acquire(&filesys_lock);
+  int retval = file_write(file, buffer, size);
+  lock_release(&filesys_lock);
+
+  return retval;
 }
 
 //==========================================================
@@ -347,13 +351,16 @@ int open(const char *file)
   struct thread *t = thread_current();
   int fd = t->current_fd;                     //get next available file descriptor
 
+  lock_acquire(&filesys_lock);
   struct file *file_1 = filesys_open(file);
   if (file_1 == NULL) {                         //open failed
+    lock_release(&filesys_lock);
     return -1;
   }
 
   t->fd_array[fd] = file_1;
   t->current_fd++;                          //update file descriptor array 
+  lock_release(&filesys_lock);
 
   return fd;
 }
@@ -372,7 +379,10 @@ void close(int fd){
   else{
     file = NULL;
   }
+
+  lock_acquire(&filesys_lock);
   file_close(file);
+  lock_release(&filesys_lock);
 }
 
 //==========================================================
@@ -390,7 +400,10 @@ int filesize(int fd)
   else{
     file = NULL;
   }
+
+  lock_acquire(&filesys_lock);
   off_t size = file_length(file);
+  lock_release(&filesys_lock);
   return size;
 }
 
@@ -408,7 +421,10 @@ unsigned tell(int fd){
   else{
     file = NULL;
   }
+
+  lock_acquire(&filesys_lock);
   off_t tell = file_tell(file);
+  lock_release(&filesys_lock);
 
   return tell;
 }
@@ -429,7 +445,9 @@ void seek(int fd, unsigned position){
     file = NULL;
   }
 
+  lock_acquire(&filesys_lock);
   file_seek(file, position);
+  lock_release(&filesys_lock);
 }
 
 //==========================================================
@@ -441,7 +459,11 @@ bool create(const char *file, unsigned initial_size){
     exit(-1);
   }
 
-  return filesys_create(file, initial_size);
+  lock_acquire(&filesys_lock);
+  bool retval = filesys_create(file, initial_size);
+  lock_release(&filesys_lock);
+
+  return retval;
 }
 
 //==========================================================
@@ -474,7 +496,11 @@ int read(int fd, void *buffer, unsigned size){
     exit(-1);
   }
 
-  return file_read(file, buffer, size);
+  lock_acquire(&filesys_lock);
+  int retval = file_read(file, buffer, size);
+  lock_release(&filesys_lock);
+
+  return retval;
 }
 
 //==========================================================
@@ -486,5 +512,9 @@ bool remove(const char *file){
     exit(-1);
   }
 
-  return filesys_remove(file);
+  lock_acquire(&filesys_lock);
+  int retval = filesys_remove(file);
+  lock_release(&filesys_lock);
+
+  return retval;
 }

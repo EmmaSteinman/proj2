@@ -108,7 +108,10 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+
+  lock_acquire(&filesys_lock);
   success = load (file_name, &if_.eip, &if_.esp);
+  lock_release(&filesys_lock);
 
   pid_t pid = thread_current()->tid;
   struct process *current_proc = get_process(pid);
@@ -128,8 +131,11 @@ start_process (void *file_name_)
     thread_exit ();
   }
 
+  /* Prevent write access to the file while it's being executed */
+  lock_acquire(&filesys_lock);
   thread_current()->file = filesys_open(file_name);
   file_deny_write(thread_current()->file);
+  lock_release(&filesys_lock);
 
   /* Put arguments on the stack */
   setup_arguments(args_count, args, &if_.esp);
@@ -166,26 +172,34 @@ process_wait (tid_t child_tid)
     return -1;
   }
 
+  /* Get the current process */
   struct thread *t = thread_current();
   struct process *parent = get_process(t->tid);
   int exit_status;
 
+  /* If the current process is not found then it's the kernel thread calling
+     process_wait() - in which case we rely on the semaphore in thread struct
+     to wait until the child thread exits */
   if (parent == NULL) {
     struct thread *t = get_thread(child_tid);
     sema_down(&t->thread_dying_sema);
     return t->exit_status;
   }
 
+  /* Otherwise check if child_tid indicates a child of the current thread */
   struct list_elem *child_elem = get_child_process(parent->pid, child_tid);
-  if (child_elem == NULL) {                     //not a valid child of parent
+  if (child_elem == NULL) {
+    //not a valid child of parent
     return -1;
   }
+
+  /* Wait the child thread to exits */
   struct child *child_proc = list_entry(child_elem, struct child, childelem);
+  sema_down(&child_proc->child_sema);
 
-  sema_down(&child_proc->child_sema);       //waits for child to exit
-
+  /* Grab the exit status, remove the child from the list of children and
+     free resources */
   exit_status = child_proc->exit_status;
-
   process_remove_child(&parent->child_lock, child_proc);        //free resources
   palloc_free_page(child_proc);
 
@@ -213,7 +227,8 @@ process_exit (void)
     }
   }
 
-  /*  */
+  /* Free the list of children - if the parent process is exiting then there's
+     no need to know the statuses of its children any more */
   struct list *child_list = &current_proc->child_list;
 
   lock_acquire(&current_proc->child_lock);
@@ -224,6 +239,7 @@ process_exit (void)
   }
   lock_release(&current_proc->child_lock);
 
+  /* Remove itself from the list of running processes */
   process_remove(current_proc);
   palloc_free_page(current_proc);
 
@@ -236,8 +252,10 @@ process_exit (void)
 
   /* Close the executable, allow it to be modified */
   if(cur->file != NULL) {
+    lock_acquire(&filesys_lock);
     file_allow_write(cur->file);
     file_close(cur->file);
+    lock_release(&filesys_lock);
   }
 
   /* Let process_wait() knows the thread is exiting */
