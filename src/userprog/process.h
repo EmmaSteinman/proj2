@@ -24,6 +24,7 @@ struct child {
 
 struct list process_list;             //holding all current processes
 struct lock process_list_lock;        //allows for synchronization
+struct lock filesys_lock;
 
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);

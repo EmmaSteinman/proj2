@@ -108,7 +108,10 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+
+  lock_acquire(&filesys_lock);
   success = load (file_name, &if_.eip, &if_.esp);
+  lock_release(&filesys_lock);
 
   pid_t pid = thread_current()->tid;
   struct process *current_proc = get_process(pid);
@@ -128,8 +131,10 @@ start_process (void *file_name_)
     thread_exit ();
   }
 
+  lock_acquire(&filesys_lock);
   thread_current()->file = filesys_open(file_name);
   file_deny_write(thread_current()->file);
+  lock_release(&filesys_lock);
 
   /* Put arguments on the stack */
   setup_arguments(args_count, args, &if_.esp);
@@ -236,8 +241,10 @@ process_exit (void)
 
   /* Close the executable, allow it to be modified */
   if(cur->file != NULL) {
+    lock_acquire(&filesys_lock);
     file_allow_write(cur->file);
     file_close(cur->file);
+    lock_release(&filesys_lock);
   }
 
   /* Let process_wait() knows the thread is exiting */
