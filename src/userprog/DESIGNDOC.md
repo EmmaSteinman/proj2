@@ -40,7 +40,9 @@
 > you arrange for the elements of argv[] to be in the right order?
 > How do you avoid overflowing the stack page?
 
-  * First we parse the arguments from the parameter into an array. We pass this into our function which then sets up the stack. It pushes each argument onto the stack in the order in which it is in the array. Then we add null bits to ensure word alignment. We then iterate through the argument array once more but pushing the address of the argument instead of the argument itself. Since we are putting pointers to the arguments, the order of the arguments themselves are not important, as long as the addresses and arguments are in the same order. We avoid overflowing the stack by limiting the number of arguments to what fits into a single page. This is achieved by initializing the size of our array to the size of a page divided by the size of a pointer.
+  * First we parse the arguments from the parameter into an array. We pass this into our function which then sets up the stack. It pushes each argument onto the stack in the order in which it is in the array. Then we add null bits to ensure word alignment. We then iterate through the argument array once more but pushing the address of the argument instead of the argument itself. Since we are putting pointers to the arguments, the order of the arguments themselves are not important, as long as the addresses and arguments are in the same order. 
+  
+  * We avoid overflowing the stack by limiting the number of arguments to 128, which is the size of the list of pointers to arguments.
 
 #### RATIONALE/JUSTIFICATION
 
@@ -129,6 +131,8 @@ struct child {
 
   * If the data is copied in one page then there will only be one call to `pagedir_get_page()` necessary. In the worst case, if all 4096 bytes are copied into separate pages, then there could be 4096 calls necessary. For a system call that only copies 2 bytes of data, they could either be copied to the same page or separate pages, so either one or two calls are necessary. The maximum number of calls necessary could be reduced if the kernel makes sure to fill one page before allocating a new page. This will minimize the number of bytes that are copied onto separate pages. This could decrease the maximum to two system calls. If the data is copied at the beginning of a page then it will all be copied onto one page. Alternatively, if the page already has some data on it before the system call begins to copy new data, then it will take up two pages; the rest of the first page and part of a new page.
 
+  * If all 4096 bytes are contiguous, then they can be on at most 2 different pages, in which case there could be at most 2 calls and at least 1 call to pagedir_get_page(). If we want to limit the number of calls to just 1, we can have the kernel allocate a new page every time the user program requests some memory. This ensures that a contiguous chunk of memory (that is less than 4096 bytes) will always be on a single page.
+
 > B5: Briefly describe your implementation of the "wait" system call
 > and how it interacts with process termination.
 
@@ -190,4 +194,4 @@ struct child {
 > B11: The default tid_t to pid_t mapping is the identity mapping.
 > If you changed it, what advantages are there to your approach?
 
-  * We kept identity mapping for `tid_t` to `pid_t`. An advantage to creating a more complex mapping could be having more information about processes and threads and their relationship, based on the relationship between the pid and tid.
+  * We kept identity mapping for `tid_t` to `pid_t`. An advantage to creating a more complex mapping could be having more information about processes and threads and their relationship, based on the relationship between the pid and tid. It will also allow multi-threading - having multiple threads within a process.
