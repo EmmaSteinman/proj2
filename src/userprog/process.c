@@ -162,9 +162,34 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid)
 {
-  struct thread *t = get_thread(child_tid);
-  sema_down(&t->thread_dying_sema);
-  return t->exit_status;
+  if (child_tid == -1){
+    return -1;
+  }
+
+  struct thread *t = thread_current();
+  struct process *parent = get_process(t->tid);
+  int exit_status;
+
+  if (parent == NULL) {
+    struct thread *t = get_thread(child_tid);
+    sema_down(&t->thread_dying_sema);
+    return t->exit_status;
+  }
+
+  struct list_elem *child_elem = get_child_process(parent->pid, child_tid);
+  if (child_elem == NULL) {                     //not a valid child of parent
+    return -1;
+  }
+  struct child *child_proc = list_entry(child_elem, struct child, childelem);
+
+  sema_down(&child_proc->child_sema);       //waits for child to exit
+
+  exit_status = child_proc->exit_status;
+
+  process_remove_child(&parent->child_lock, child_proc);        //free resources
+  palloc_free_page(child_proc);
+
+  return exit_status;
 }
 
 /* Free the current process's resources. */
