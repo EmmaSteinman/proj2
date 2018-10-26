@@ -94,10 +94,12 @@ start_process (void *file_name_)
 
   /* Parse arguments */
   int args_count = 0;
-  char *args[128];
+  int max_args = PGSIZE / sizeof(void *);
+  char **args = palloc_get_page(PAL_ZERO);
   char *token, *save_ptr;
 
-  for (token = strtok_r (file_name, " ", &save_ptr); token != NULL;
+  for (token = strtok_r (file_name, " ", &save_ptr);
+      token != NULL && args_count <= max_args;
       token = strtok_r (NULL, " ", &save_ptr)){
         args[args_count] = token;
         args_count++;
@@ -120,6 +122,8 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   if (!success) {
     palloc_free_page(file_name);
+    palloc_free_page(args);
+
     if (child_proc != NULL) {
       child_proc->load_success = false;
       sema_up(&child_proc->load_done_sema);
@@ -133,6 +137,7 @@ start_process (void *file_name_)
   /* Put arguments on the stack */
   setup_arguments(args_count, args, &if_.esp);
   palloc_free_page(file_name);
+  palloc_free_page(args);
 
   if (child_proc != NULL) {
     child_proc->load_success = true;
