@@ -285,10 +285,12 @@ pid_t exec (const char *cmd_line)
   new_child->pid = p;
   sema_down(&new_child->load_done_sema);
 
-  if (new_child->load_success) {              //load sucessful
+  if (new_child->load_success) {
+    // load sucessful
     return p;
   } else {
-    process_remove_child(&parent->child_lock, new_child);             //load failed - free resourdes
+    // load failed - free resources
+    process_remove_child(&parent->child_lock, new_child);
     palloc_free_page(new_child);  
     return -1;
   }

@@ -19,8 +19,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-#define DEBUG 0
-
+#define MAX_ARGS 128
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -94,12 +93,11 @@ start_process (void *file_name_)
 
   /* Parse arguments */
   int args_count = 0;
-  int max_args = PGSIZE / sizeof(void *);
-  char **args = palloc_get_page(PAL_ZERO);
+  char *args[MAX_ARGS];
   char *token, *save_ptr;
 
   for (token = strtok_r (file_name, " ", &save_ptr);
-      token != NULL && args_count <= max_args;
+      token != NULL && args_count <= MAX_ARGS;
       token = strtok_r (NULL, " ", &save_ptr)){
         args[args_count] = token;
         args_count++;
@@ -122,7 +120,6 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   if (!success) {
     palloc_free_page(file_name);
-    palloc_free_page(args);
 
     if (child_proc != NULL) {
       child_proc->load_success = false;
@@ -137,7 +134,6 @@ start_process (void *file_name_)
   /* Put arguments on the stack */
   setup_arguments(args_count, args, &if_.esp);
   palloc_free_page(file_name);
-  palloc_free_page(args);
 
   if (child_proc != NULL) {
     child_proc->load_success = true;
@@ -600,10 +596,10 @@ install_page (void *upage, void *kpage, bool writable)
 // setup_arguments
 // pushes arguments onto stack with respective addresses
 //==========================================================
-static void
+static void 
 setup_arguments(int argc, char **args, void **esp)
 {
-  char *args_addr[128];
+  char *args_addr[MAX_ARGS];
 
   // Push the arguments
   void *current_address = *esp;
